@@ -71,3 +71,20 @@ def test_cors_header(db, world, client_for):
             return await client.get("/manifest.json", headers={"Origin": "https://web.stremio.com"})
 
     assert db(scenario).headers["access-control-allow-origin"] == "*"
+
+
+def test_private_network_preflight(db, world, client_for):
+    """Stremio's UI is a public https page; Chromium preflights its requests to a
+    localhost addon and blocks them unless the server opts in."""
+
+    async def scenario(session):
+        async with client_for(session) as client:
+            return await client.options("/manifest.json", headers={
+                "Origin": "https://web.stremio.com",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Private-Network": "true",
+            })
+
+    resp = db(scenario)
+    assert resp.status_code == 200
+    assert resp.headers["access-control-allow-private-network"] == "true"

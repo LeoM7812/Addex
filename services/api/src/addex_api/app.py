@@ -26,8 +26,12 @@ def create_app(sessionmaker: async_sessionmaker | None = None) -> FastAPI:
             await engine.dispose()
 
     app = FastAPI(title="Addex", version=__version__, lifespan=lifespan)
-    # Stremio clients (including web.stremio.com) call addons cross-origin.
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
+    # Stremio clients (including web.stremio.com) call addons cross-origin. Private
+    # network access lets Chromium-based clients reach an instance on localhost/LAN:
+    # without it their preflight is rejected and installing fails with "Failed to fetch".
+    app.add_middleware(
+        CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_private_network=True
+    )
     app.include_router(routes_api.router)
     app.include_router(routes_stremio.router)
 
