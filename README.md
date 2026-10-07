@@ -33,6 +33,7 @@ addex manifest https://example.com/manifest.json   # inspect a manifest, no DB n
 addex registry sync                        # registry/addons.yaml -> addons table
 addex seed anime --limit 500               # most popular anime from Kitsu, with MAL/AniList IDs
 addex seed imdb --limit 500                # most popular movies + series from Cinemeta (IMDb IDs)
+addex link anime                           # group Kitsu entries under their IMDb title (run after seeding)
 addex-crawler run                          # see services/crawler/README.md
 ```
 
@@ -45,6 +46,7 @@ addon `disabled` on the next sync, adding it back re-enables it.
 |----------------|---------------|
 | `addons`       | one row per registered manifest URL; normalized stream scopes (types + id prefixes) and health |
 | `titles`       | movies / series / anime to probe, with a popularity rank that drives refresh frequency |
+|                | Kitsu anime entries (one per season) point to their IMDb series/movie via `parent_id`; search shows parents |
 | `title_ids`    | external IDs per title (`imdb`, `kitsu`, `mal`, ...). One title can have several |
 | `availability` | latest probe result per (addon, title): status, has_streams, stream_count, latency, next_check_at |
 

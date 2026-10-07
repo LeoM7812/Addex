@@ -112,6 +112,11 @@ class Title(Base):
     poster: Mapped[str | None] = mapped_column(Text)
     # Lower is more popular. Drives the adaptive refresh TTL. Null = not ranked.
     popularity_rank: Mapped[int | None] = mapped_column(Integer, index=True)
+    # Groups per-season anime entries (Kitsu) under their IMDb series or movie, so search
+    # can show one result. One level deep: parents never have a parent.
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("titles.id", ondelete="SET NULL"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -123,6 +128,8 @@ class Title(Base):
         back_populates="title", cascade="all, delete-orphan"
     )
     availability: Mapped[list["Availability"]] = relationship(back_populates="title")
+    parent: Mapped["Title | None"] = relationship(remote_side=[id], back_populates="children")
+    children: Mapped[list["Title"]] = relationship(back_populates="parent")
 
 
 class TitleId(Base):

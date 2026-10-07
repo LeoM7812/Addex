@@ -33,7 +33,9 @@ def is_anime(meta: dict[str, Any]) -> bool:
     return "Animation" in (meta.get("genres") or []) and first_country == "Japan"
 
 
-def parse_meta(meta: dict[str, Any], stremio_type: str, rank: int) -> TitleSeed | None:
+def parse_meta(
+    meta: dict[str, Any], stremio_type: str, rank: int | None
+) -> TitleSeed | None:
     imdb_id = meta.get("imdb_id") or meta.get("id") or ""
     if not IMDB_ID.match(imdb_id) or not meta.get("name"):
         return None
@@ -68,3 +70,19 @@ async def fetch_top(
         skip += len(metas)
         await asyncio.sleep(delay)
     return list(seeds.values())[:limit]
+
+
+async def fetch_meta(
+    client: httpx.AsyncClient, imdb_id: str, types: tuple[str, ...] = ("series", "movie")
+) -> TitleSeed | None:
+    """One title by IMDb ID, unranked. Tries each type in turn, since the caller may only
+    guess whether it is a movie or a series."""
+    for stremio_type in types:
+        try:
+            data = await get_json(client, f"{BASE}/meta/{stremio_type}/{imdb_id}.json", retries=2)
+        except httpx.HTTPStatusError:
+            continue
+        meta = (data or {}).get("meta")
+        if meta:
+            return parse_meta(meta, meta.get("type") or stremio_type, rank=None)
+    return None

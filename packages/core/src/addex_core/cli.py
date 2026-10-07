@@ -4,6 +4,7 @@
   addex registry sync [--registry FILE]     upsert registry addons into the database
   addex seed anime [--limit N]              load the most popular anime from Kitsu
   addex seed imdb [--limit N] [--type T]    load the most popular movies/series from Cinemeta
+  addex link anime                          group Kitsu entries under their IMDb title
 """
 
 import argparse
@@ -13,7 +14,8 @@ from pathlib import Path
 
 import httpx
 
-from addex_core import cinemeta
+from addex_core import animelists, cinemeta
+from addex_core.linking import link_anime
 from addex_core.db import make_engine, make_sessionmaker
 from addex_core.kitsu import fetch_top_anime
 from addex_core.manifest import Manifest, ManifestError
@@ -92,6 +94,32 @@ async def cmd_seed_imdb(args: argparse.Namespace) -> int:
     return await _store_seeds(seeds)
 
 
+async def cmd_link_anime(args: argparse.Namespace) -> int:
+    async with _client() as client:
+        mapping = await animelists.fetch_kitsu_to_imdb(client)
+        sem = asyncio.Semaphore(4)
+
+        async def fetch_one(imdb_id: str, types: tuple[str, ...]):
+            async with sem:
+                return imdb_id, await cinemeta.fetch_meta(client, imdb_id, types)
+
+        async def fetch_parents(wanted: dict[str, tuple[str, ...]]):
+            print(f"fetching {len(wanted)} parent titles from Cinemeta...")
+            return dict(await asyncio.gather(*(fetch_one(i, t) for i, t in wanted.items())))
+
+        engine = make_engine()
+        try:
+            async with make_sessionmaker(engine).begin() as session:
+                report = await link_anime(session, mapping, fetch_parents)
+        finally:
+            await engine.dispose()
+    if report.parents_missing:
+        print(f"not on Cinemeta: {', '.join(report.parents_missing)}")
+    print(f"{report.linked} linked ({report.changed} changed), {report.unmapped} without "
+          f"IMDb mapping, {report.parents_created} parents created")
+    return 0
+
+
 async def _store_seeds(seeds: list[TitleSeed]) -> int:
     engine = make_engine()
     try:
@@ -132,6 +160,12 @@ def main() -> None:
     p.add_argument("--limit", type=int, default=500, help="titles per type")
     p.add_argument("--type", choices=["movie", "series", "both"], default="both")
     p.set_defaults(func=cmd_seed_imdb)
+
+    link = sub.add_parser("link", help="link titles across sources").add_subparsers(
+        required=True, metavar="what"
+    )
+    p = link.add_parser("anime", help="group Kitsu entries under their IMDb title")
+    p.set_defaults(func=cmd_link_anime)
 
     args = parser.parse_args()
     # psycopg's async mode can't run on Windows' default Proactor event loop.
