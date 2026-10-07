@@ -15,6 +15,7 @@ services/crawler/   asyncio + httpx job runner that probes /stream/{type}/{id}.j
 services/api/       FastAPI: search + the Addex Stremio addon
 apps/web/           Next.js front-end                                                 (todo)
 registry/           curated list of addon manifest URLs
+deploy/             production docker-compose + Caddy; see deploy/README.md
 ```
 
 ## Development

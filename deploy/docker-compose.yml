@@ -1,0 +1,88 @@
+# Production stack: Postgres, Redis, API, crawler and Caddy (automatic HTTPS).
+#
+#   cp deploy/.env.example deploy/.env    # then fill it in
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+#
+# Only Caddy publishes ports (80/443). See deploy/README.md.
+
+name: addex-prod
+
+x-app: &app
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  image: addex:latest
+  restart: unless-stopped
+  environment:
+    ADDEX_DATABASE_URL: postgresql+psycopg://addex:${POSTGRES_PASSWORD}@postgres:5432/addex
+    ADDEX_REDIS_URL: redis://redis:6379/0
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: addex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: addex
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "addex"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    # Snapshot every minute so queued jobs survive a restart.
+    command: ["redis-server", "--save", "60", "1"]
+    volumes:
+      - redisdata:/data
+
+  migrate:
+    <<: *app
+    restart: "no"
+    command: ["alembic", "-c", "packages/core/alembic.ini", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: ["addex-api", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  crawler:
+    <<: *app
+    command: ["addex-crawler", "run"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ADDEX_DOMAIN: ${ADDEX_DOMAIN:?set ADDEX_DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

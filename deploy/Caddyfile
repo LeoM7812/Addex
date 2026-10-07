@@ -1,0 +1,5 @@
+# Caddy gets and renews a Let's Encrypt certificate for the domain on its own.
+{$ADDEX_DOMAIN} {
+	encode gzip
+	reverse_proxy api:8000
+}
