@@ -53,5 +53,8 @@ def test_title_detail_from_child_returns_group(db, world, client_for):
     assert (torrentio["name"], torrentio["entries_with_streams"], torrentio["max_stream_count"]) \
         == ("Torrentio", 2, 30)
     assert torrentio["install_url"] == "stremio://torrentio.example/manifest.json"
+    assert torrentio["web_install_url"] == (
+        "https://web.stremio.com/#/addons?addon=https%3A%2F%2Ftorrentio.example%2Fmanifest.json"
+    )
     assert (tpb["name"], tpb["has_streams"], tpb["entries_with_streams"]) == ("TPB Plus", True, 1)
     assert len(tpb["entries"]) == 2

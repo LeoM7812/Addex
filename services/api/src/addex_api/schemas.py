@@ -56,6 +56,7 @@ class AddonOut(BaseModel):
     logo: str | None
     manifest_url: str
     install_url: str
+    web_install_url: str
     p2p: bool
     has_streams: bool
     entries_with_streams: int
@@ -68,7 +69,8 @@ class AddonOut(BaseModel):
     def of(cls, a: AddonResult) -> "AddonOut":
         return cls(
             id=a.id, name=a.name, description=a.description, logo=a.logo,
-            manifest_url=a.manifest_url, install_url=a.install_url, p2p=a.p2p,
+            manifest_url=a.manifest_url, install_url=a.install_url,
+            web_install_url=a.web_install_url, p2p=a.p2p,
             has_streams=a.has_streams, entries_with_streams=a.entries_with_streams,
             max_stream_count=a.max_stream_count, last_checked=a.last_checked,
             confirmed_at=a.confirmed_at,

@@ -44,8 +44,8 @@ def test_stream_lists_addons_to_install(db, world, client_for, path):
     assert body["cacheMaxAge"] == 3600
     streams = body["streams"]
     assert [s["externalUrl"] for s in streams] == [
-        "stremio://torrentio.example/manifest.json",
-        "stremio://tpbplus.example/manifest.json",
+        "https://web.stremio.com/#/addons?addon=https%3A%2F%2Ftorrentio.example%2Fmanifest.json",
+        "https://web.stremio.com/#/addons?addon=https%3A%2F%2Ftpbplus.example%2Fmanifest.json",
     ]
     assert streams[0]["description"] == "Install Torrentio\n30 streams · P2P · confirmed 1 h ago"
     # TPB's newest check (1 h ago) was an empty entry; its streams were confirmed 50 h ago.

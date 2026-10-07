@@ -19,6 +19,6 @@ addex-api --port 8000          # docs at http://127.0.0.1:8000/docs
 
 Install `http://<host>/manifest.json` in Stremio. For a movie or episode it lists every
 indexed addon that has the title, as `Install <addon>` entries whose `externalUrl` is the
-addon's `stremio://` install link. It never returns a playable source.
+Stremio Web install page (`web.stremio.com/#/addons?addon=...`); a `stremio://` link would be mangled, since Stremio opens `externalUrl` in the system browser. It never returns a playable source.
 
 Addons that are not `active` (disabled, broken, needing configuration) are never shown.

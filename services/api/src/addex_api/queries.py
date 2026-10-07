@@ -11,7 +11,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from addex_core.ids import IdScheme
-from addex_core.manifest import install_url
+from addex_core.manifest import install_url, web_install_url
 from addex_core.models import Addon, AddonStatus, Availability, Title, TitleId
 
 FUZZY_THRESHOLD = 0.6
@@ -106,6 +106,7 @@ class AddonResult:
     logo: str | None
     manifest_url: str
     install_url: str
+    web_install_url: str
     p2p: bool
     entries: list[EntryResult] = field(default_factory=list)
 
@@ -170,6 +171,7 @@ async def title_group(session: AsyncSession, title_id: int) -> TitleGroup | None
         result = addons.setdefault(addon.id, AddonResult(
             id=addon.id, name=addon.name, description=addon.description, logo=addon.logo,
             manifest_url=addon.manifest_url, install_url=install_url(addon.manifest_url),
+            web_install_url=web_install_url(addon.manifest_url),
             p2p=addon.p2p,
         ))
         result.entries.append(EntryResult(

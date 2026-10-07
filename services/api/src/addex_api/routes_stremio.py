@@ -65,7 +65,9 @@ def stream_entry(addon: AddonResult, now: datetime) -> dict:
     text = f"Install {addon.name}\n" + " · ".join(details)
     # Only `description`: stremio-core aliases `title` to it, and sending both is a
     # duplicate-field error that makes the client drop the whole response.
-    return {"name": "Addex", "description": text, "externalUrl": addon.install_url}
+    # Stremio hands externalUrl to the system browser, so the stremio:// link would
+    # break; the Stremio Web install page works from every client.
+    return {"name": "Addex", "description": text, "externalUrl": addon.web_install_url}
 
 
 @router.get("/manifest.json")

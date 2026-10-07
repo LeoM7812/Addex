@@ -131,8 +131,16 @@ class Manifest:
 
 
 def install_url(manifest_url: str) -> str:
-    """`stremio://` deep link that opens the install dialog in the Stremio app."""
+    """`stremio://` deep link that opens the install dialog in the Stremio app. Works
+    from a browser page; not from inside Stremio (a stream's externalUrl is handed to
+    the browser, which mangles the scheme)."""
     return "stremio://" + manifest_url.split("://", 1)[1]
+
+
+def web_install_url(manifest_url: str) -> str:
+    """Stremio Web page with the addon's install dialog. Installs to the user's account,
+    so it reaches every signed-in Stremio app."""
+    return "https://web.stremio.com/#/addons?addon=" + quote(manifest_url, safe="")
 
 
 def stream_url(base_url: str, stremio_type: str, stremio_id: str) -> str:
