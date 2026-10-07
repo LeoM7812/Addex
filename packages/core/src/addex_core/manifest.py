@@ -117,8 +117,7 @@ class Manifest:
 
     @property
     def install_url(self) -> str:
-        """`stremio://` deep link that opens the install dialog in the Stremio app."""
-        return "stremio://" + self.manifest_url.split("://", 1)[1]
+        return install_url(self.manifest_url)
 
     @property
     def stream_types(self) -> frozenset[str]:
@@ -129,6 +128,11 @@ class Manifest:
 
     def stream_url(self, stremio_type: str, stremio_id: str) -> str:
         return stream_url(self.base_url, stremio_type, stremio_id)
+
+
+def install_url(manifest_url: str) -> str:
+    """`stremio://` deep link that opens the install dialog in the Stremio app."""
+    return "stremio://" + manifest_url.split("://", 1)[1]
 
 
 def stream_url(base_url: str, stremio_type: str, stremio_id: str) -> str:

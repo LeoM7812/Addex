@@ -1,4 +1,4 @@
 # Repo-level config only; each Python package has its own pyproject.toml.
 
 [tool.pytest.ini_options]
-testpaths = ["packages/core/tests", "services/crawler/tests"]
+testpaths = ["packages/core/tests", "services/crawler/tests", "services/api/tests"]

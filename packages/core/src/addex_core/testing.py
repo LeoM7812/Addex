@@ -44,6 +44,9 @@ def _test_database() -> str:
         admin.dispose()
 
     engine = create_engine(url)
+    with engine.begin() as conn:
+        # Extensions that migrations create; create_all doesn't know about them.
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     engine.dispose()

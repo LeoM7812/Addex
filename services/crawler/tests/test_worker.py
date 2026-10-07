@@ -2,10 +2,10 @@ import httpx
 from redis.asyncio import Redis
 
 from addex_core.models import CheckStatus
+from addex_core.testing import run
 from addex_crawler import queue
 from addex_crawler.queue import Job
 from addex_crawler.worker import WorkerConfig, run_worker
-from conftest import run
 
 CONFIG = WorkerConfig(rate=1000, concurrency=2, timeout=1, idle_poll=0.1)
 

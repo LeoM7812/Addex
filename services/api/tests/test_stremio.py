@@ -1,0 +1,73 @@
+import pytest
+
+from addex_api.routes_stremio import parse_stremio_id
+from addex_core.ids import IdScheme
+
+
+@pytest.mark.parametrize(
+    "sid, expected",
+    [
+        ("tt2560140", (IdScheme.IMDB, "tt2560140")),
+        ("tt2560140:2:5", (IdScheme.IMDB, "tt2560140")),
+        ("kitsu:7442", (IdScheme.KITSU, "7442")),
+        ("kitsu:7442:12", (IdScheme.KITSU, "7442")),
+        ("mal:16498:1", (IdScheme.MAL, "16498")),
+        ("yt_id:abc", None),
+        ("tt12x", None),
+    ],
+)
+def test_parse_stremio_id(sid, expected):
+    assert parse_stremio_id(sid) == expected
+
+
+def _get(db, world, client_for, path):
+    async def scenario(session):
+        await world(session)
+        async with client_for(session) as client:
+            return await client.get(path)
+
+    return db(scenario)
+
+
+def test_manifest(db, world, client_for):
+    body = _get(db, world, client_for, "/manifest.json").json()
+    assert body["resources"] == ["stream"] and body["catalogs"] == []
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/stream/series/tt2560140:3:1.json", "/stream/series/kitsu:8671:4.json",
+     "/stream/series/kitsu%3A7442%3A1.json"],
+)
+def test_stream_lists_addons_to_install(db, world, client_for, path):
+    body = _get(db, world, client_for, path).json()
+    assert body["cacheMaxAge"] == 3600
+    streams = body["streams"]
+    assert [s["externalUrl"] for s in streams] == [
+        "stremio://torrentio.example/manifest.json",
+        "stremio://tpbplus.example/manifest.json",
+    ]
+    assert streams[0]["description"] == "Install Torrentio\n30 streams · P2P · confirmed 1 h ago"
+    # TPB's newest check (1 h ago) was an empty entry; its streams were confirmed 50 h ago.
+    assert streams[1]["description"].endswith("5 streams · P2P · confirmed 2 days ago")
+    # Addex never hands out a playable source.
+    for s in streams:
+        assert not {"url", "infoHash", "ytId"} & s.keys()
+
+
+@pytest.mark.parametrize(
+    "path", ["/stream/movie/tt0000001.json", "/stream/series/kitsu:1376:1.json",
+             "/stream/series/garbage.json"],
+)
+def test_stream_without_results(db, world, client_for, path):
+    # Unknown title, a title whose only check timed out, an unparseable ID.
+    assert _get(db, world, client_for, path).json()["streams"] == []
+
+
+def test_cors_header(db, world, client_for):
+    async def scenario(session):
+        await world(session)
+        async with client_for(session) as client:
+            return await client.get("/manifest.json", headers={"Origin": "https://web.stremio.com"})
+
+    assert db(scenario).headers["access-control-allow-origin"] == "*"

@@ -12,7 +12,7 @@ come from the addon itself, after the user installs it.
 packages/core/      shared Python: data model, migrations, manifest parser, registry sync,
                     title seeds, Stremio ID helpers, `addex` CLI
 services/crawler/   asyncio + httpx job runner that probes /stream/{type}/{id}.json
-services/api/       FastAPI: search + the Addex Stremio addon                         (todo)
+services/api/       FastAPI: search + the Addex Stremio addon
 apps/web/           Next.js front-end                                                 (todo)
 registry/           curated list of addon manifest URLs
 ```
@@ -22,7 +22,7 @@ registry/           curated list of addon manifest URLs
 ```sh
 docker compose up -d                       # postgres (port 5433) + redis
 python -m venv .venv && . .venv/Scripts/activate   # or .venv/bin/activate
-pip install -e "packages/core[dev]" -e "services/crawler[dev]"
+pip install -e "packages/core[dev]" -e "services/crawler[dev]" -e "services/api[dev]"
 
 cp .env.example .env
 cd packages/core && alembic upgrade head && cd ../..
@@ -35,6 +35,7 @@ addex seed anime --limit 500               # most popular anime from Kitsu, with
 addex seed imdb --limit 500                # most popular movies + series from Cinemeta (IMDb IDs)
 addex link anime                           # group Kitsu entries under their IMDb title (run after seeding)
 addex-crawler run                          # see services/crawler/README.md
+addex-api                                  # see services/api/README.md
 ```
 
 `registry/addons.yaml` is the source of truth for tracked addons: removing an entry marks the
