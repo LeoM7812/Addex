@@ -12,14 +12,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from addex_api import __version__
-from addex_api.deps import get_session
+from addex_api.deps import NoteDemand, get_note_demand, get_session
 from addex_api.queries import AddonResult, title_group, title_id_for
+from addex_core.demand import DemandRequest
 from addex_core.ids import IdScheme
 
 router = APIRouter()
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 CACHE_MAX_AGE = 3600
+# Nothing known yet usually means a check was just queued: let clients ask again soon.
+EMPTY_CACHE_MAX_AGE = 60
 
 MANIFEST = {
     "id": "org.addex.index",
@@ -76,12 +79,20 @@ async def manifest():
 
 
 @router.get("/stream/{stremio_type}/{stremio_id}.json")
-async def stream(session: Session, stremio_type: str, stremio_id: str):
+async def stream(
+    session: Session,
+    note_demand: Annotated[NoteDemand, Depends(get_note_demand)],
+    stremio_type: str,
+    stremio_id: str,
+):
     streams: list[dict] = []
     parsed = parse_stremio_id(stremio_id)
+    if parsed:
+        # Unknown titles get indexed and stale ones re-checked, ahead of the backlog.
+        await note_demand(DemandRequest(*parsed, type=stremio_type))
     title_id = await title_id_for(session, *parsed) if parsed else None
     group = await title_group(session, title_id) if title_id else None
     if group:
         now = datetime.now(UTC)
         streams = [stream_entry(a, now) for a in group.addons if a.has_streams]
-    return {"streams": streams, "cacheMaxAge": CACHE_MAX_AGE}
+    return {"streams": streams, "cacheMaxAge": CACHE_MAX_AGE if streams else EMPTY_CACHE_MAX_AGE}

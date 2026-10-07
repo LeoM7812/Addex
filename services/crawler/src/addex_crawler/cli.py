@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from addex_core.db import make_engine, make_sessionmaker
 from addex_core.models import Addon, Availability, CheckStatus
 from addex_crawler import queue
+from addex_crawler.demand import demand_loop
 from addex_crawler.scheduler import due_jobs
 from addex_crawler.worker import WorkerConfig, db_sink, run_worker
 
@@ -68,14 +69,19 @@ async def cmd_work(args: argparse.Namespace, schedule: bool = False) -> int:
     limits = httpx.Limits(max_connections=200, max_keepalive_connections=50)
     try:
         async with httpx.AsyncClient(headers={"User-Agent": USER_AGENT}, limits=limits) as client:
+            until_empty = getattr(args, "until_empty", False)
             worker = run_worker(redis, client, db_sink(sessionmaker), _worker_config(args),
-                                until_empty=getattr(args, "until_empty", False))
-            if schedule:
-                async with asyncio.TaskGroup() as tg:
-                    tg.create_task(schedule_loop(redis, sessionmaker, args))
-                    tg.create_task(worker)
-            else:
+                                until_empty=until_empty)
+            if until_empty:
                 await worker
+                return 0
+            async with asyncio.TaskGroup() as tg:
+                tg.create_task(worker)
+                # Titles opened in Stremio: index them and probe them first.
+                tg.create_task(demand_loop(redis, sessionmaker, client,
+                                           max_queue=getattr(args, "max_queue", 500)))
+                if schedule:
+                    tg.create_task(schedule_loop(redis, sessionmaker, args))
     finally:
         await redis.aclose()
         await engine.dispose()

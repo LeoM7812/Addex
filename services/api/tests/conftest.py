@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from addex_api.app import create_app
-from addex_api.deps import get_session
+from addex_api.deps import get_note_demand, get_session
 from addex_core.ids import IdScheme
 from addex_core.models import Addon, AddonStatus, Availability, CheckStatus, Title, TitleId
 from addex_core.testing import _test_database, db  # noqa: F401
@@ -12,14 +12,23 @@ from addex_core.testing import _test_database, db  # noqa: F401
 NOW = datetime.now(UTC)
 
 
-def _client_for(session) -> httpx.AsyncClient:
-    """An HTTP client for the app, bound to the test's session."""
+def _client_for(session, demand: list | None = None) -> httpx.AsyncClient:
+    """An HTTP client for the app, bound to the test's session. Demand notes are
+    appended to `demand` instead of going to Redis."""
     app = create_app()
 
     async def override():
         yield session
 
+    def note_demand():
+        async def note(req):
+            if demand is not None:
+                demand.append(req)
+
+        return note
+
     app.dependency_overrides[get_session] = override
+    app.dependency_overrides[get_note_demand] = note_demand
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
 
 

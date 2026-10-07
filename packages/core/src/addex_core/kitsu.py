@@ -77,3 +77,18 @@ async def fetch_top_anime(
         offset += PAGE_SIZE
         await asyncio.sleep(delay)
     return list(seeds.values())[:limit]
+
+
+async def fetch_anime(client: httpx.AsyncClient, kitsu_id: str) -> TitleSeed | None:
+    """One anime by Kitsu ID, or None if Kitsu doesn't have it or it is a skipped
+    subtype. Keeps Kitsu's global popularity rank, the same scale the seed uses."""
+    params = {k: v for k, v in PARAMS.items() if k in ("include", "fields[anime]",
+                                                       "fields[mappings]")}
+    try:
+        data = await get_json(client, f"{API}/{kitsu_id}", params, retries=2)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return None
+        raise
+    seeds = parse_page({"data": [data["data"]], "included": data.get("included", [])})
+    return seeds[0] if seeds else None

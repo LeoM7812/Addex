@@ -1,6 +1,7 @@
 import pytest
 
 from addex_api.routes_stremio import parse_stremio_id
+from addex_core.demand import DemandRequest
 from addex_core.ids import IdScheme
 
 
@@ -63,7 +64,9 @@ def test_stream_lists_addons_to_install(db, world, client_for, path):
 )
 def test_stream_without_results(db, world, client_for, path):
     # Unknown title, a title whose only check timed out, an unparseable ID.
-    assert _get(db, world, client_for, path).json()["streams"] == []
+    body = _get(db, world, client_for, path).json()
+    assert body["streams"] == []
+    assert body["cacheMaxAge"] == 60  # a check may have just been queued
 
 
 def test_cors_header(db, world, client_for):
@@ -90,3 +93,20 @@ def test_private_network_preflight(db, world, client_for):
     resp = db(scenario)
     assert resp.status_code == 200
     assert resp.headers["access-control-allow-private-network"] == "true"
+
+
+def test_stream_requests_note_demand(db, world, client_for):
+    noted = []
+
+    async def scenario(session):
+        await world(session)
+        async with client_for(session, noted) as client:
+            await client.get("/stream/series/tt2560140:3:1.json")
+            await client.get("/stream/movie/tt0000001.json")  # unknown: noted too
+            await client.get("/stream/series/garbage.json")  # unparseable: not noted
+
+    db(scenario)
+    assert noted == [
+        DemandRequest(IdScheme.IMDB, "tt2560140", "series"),
+        DemandRequest(IdScheme.IMDB, "tt0000001", "movie"),
+    ]

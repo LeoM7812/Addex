@@ -1,6 +1,6 @@
 """Decides which (addon, title) pairs are due and which Stremio ID to probe them with."""
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from datetime import datetime
 from urllib.parse import urlsplit
 
@@ -34,10 +34,13 @@ def pick_probe_id(
 
 
 async def due_jobs(
-    session: AsyncSession, now: datetime, top_titles: int | None = None
+    session: AsyncSession,
+    now: datetime,
+    top_titles: int | None = None,
+    title_ids: Collection[int] | None = None,
 ) -> list[Job]:
     """Jobs for every active addon x title pair that was never checked or is past its
-    `next_check_at`, most popular titles first.
+    `next_check_at`, most popular titles first. `title_ids` restricts it to those titles.
 
     Loads everything into memory: fine for the MVP (tens of addons, thousands of
     titles); push the matching into SQL when that stops being true.
@@ -51,13 +54,12 @@ async def due_jobs(
         .order_by(Title.popularity_rank.asc().nulls_last(), Title.id)
         .limit(top_titles)
     )
+    checks_q = select(Availability.addon_id, Availability.title_id, Availability.next_check_at)
+    if title_ids is not None:
+        titles_q = titles_q.where(Title.id.in_(title_ids))
+        checks_q = checks_q.where(Availability.title_id.in_(title_ids))
     titles = (await session.scalars(titles_q)).all()
-    next_check = {
-        (a, t): at
-        for a, t, at in await session.execute(
-            select(Availability.addon_id, Availability.title_id, Availability.next_check_at)
-        )
-    }
+    next_check = {(a, t): at for a, t, at in await session.execute(checks_q)}
     scopes = {a.id: [StreamScope.from_json(s) for s in a.stream_scopes] for a in addons}
 
     jobs = []

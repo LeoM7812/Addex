@@ -97,15 +97,10 @@ async def cmd_seed_imdb(args: argparse.Namespace) -> int:
 async def cmd_link_anime(args: argparse.Namespace) -> int:
     async with _client() as client:
         mapping = await animelists.fetch_kitsu_to_imdb(client)
-        sem = asyncio.Semaphore(4)
-
-        async def fetch_one(imdb_id: str, types: tuple[str, ...]):
-            async with sem:
-                return imdb_id, await cinemeta.fetch_meta(client, imdb_id, types)
 
         async def fetch_parents(wanted: dict[str, tuple[str, ...]]):
             print(f"fetching {len(wanted)} parent titles from Cinemeta...")
-            return dict(await asyncio.gather(*(fetch_one(i, t) for i, t in wanted.items())))
+            return await cinemeta.fetch_metas(client, wanted)
 
         engine = make_engine()
         try:

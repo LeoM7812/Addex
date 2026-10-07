@@ -86,3 +86,16 @@ async def fetch_meta(
         if meta:
             return parse_meta(meta, meta.get("type") or stremio_type, rank=None)
     return None
+
+
+async def fetch_metas(
+    client: httpx.AsyncClient, wanted: dict[str, tuple[str, ...]], concurrency: int = 4
+) -> dict[str, TitleSeed | None]:
+    """Several titles by IMDb ID ({imdb_id: types to try}), a few at a time."""
+    sem = asyncio.Semaphore(concurrency)
+
+    async def one(imdb_id: str, types: tuple[str, ...]) -> tuple[str, TitleSeed | None]:
+        async with sem:
+            return imdb_id, await fetch_meta(client, imdb_id, types)
+
+    return dict(await asyncio.gather(*(one(i, t) for i, t in wanted.items())))

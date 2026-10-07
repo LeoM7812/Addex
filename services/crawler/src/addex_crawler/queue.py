@@ -43,20 +43,34 @@ class Job:
         return cls(**json.loads(raw))
 
 
-async def enqueue(redis: Redis, jobs: list[Job], max_queue: int) -> int:
+async def enqueue(
+    redis: Redis, jobs: list[Job], max_queue: int, priority: bool = False
+) -> int:
     """Push jobs whose pair isn't already queued, keeping each host's queue at or below
-    `max_queue`. Jobs should come ordered by priority. Returns how many were pushed."""
+    `max_queue`. Jobs should come ordered by priority. Returns how many were pushed.
+
+    `priority` jobs (someone is looking at the title) go to the consuming end of the
+    queue, ignore `max_queue`, and jump ahead if their pair is already waiting."""
     room: dict[str, int] = {}
     pushed = 0
     for job in jobs:
+        key = queue_key(job.host)
         if job.host not in room:
-            room[job.host] = max_queue - await redis.llen(queue_key(job.host))
+            room[job.host] = max_queue - await redis.llen(key)
             await redis.sadd(HOSTS_KEY, job.host)
-        if room[job.host] <= 0:
+        if not priority and room[job.host] <= 0:
             continue
         if not await redis.set(lock_key(job.addon_id, job.title_id), 1, nx=True, ex=LOCK_TTL):
+            # Already queued or in flight. Move a waiting one to the front; leave an
+            # in-flight one alone (LREM finds nothing).
+            if priority and await redis.lrem(key, 0, job.dumps()):
+                await redis.rpush(key, job.dumps())
+                pushed += 1
             continue
-        await redis.lpush(queue_key(job.host), job.dumps())
+        if priority:
+            await redis.rpush(key, job.dumps())
+        else:
+            await redis.lpush(key, job.dumps())
         room[job.host] -= 1
         pushed += 1
     return pushed

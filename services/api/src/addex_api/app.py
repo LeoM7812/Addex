@@ -1,7 +1,9 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from addex_api import __version__, routes_api, routes_stremio
@@ -20,9 +22,14 @@ def create_app(sessionmaker: async_sessionmaker | None = None) -> FastAPI:
             return
         engine = make_engine()
         app.state.sessionmaker = make_sessionmaker(engine)
+        app.state.redis = Redis.from_url(
+            os.environ.get("ADDEX_REDIS_URL", "redis://localhost:6379/0"),
+            decode_responses=True, socket_timeout=2,
+        )
         try:
             yield
         finally:
+            await app.state.redis.aclose()
             await engine.dispose()
 
     app = FastAPI(title="Addex", version=__version__, lifespan=lifespan)
