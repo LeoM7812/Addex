@@ -3,7 +3,7 @@ import asyncio
 import httpx
 import pytest
 
-from addex_core import kitsu
+from addex_core import http, kitsu
 from addex_core.ids import IdScheme
 
 
@@ -84,7 +84,7 @@ def test_fetch_retries_rate_limit(monkeypatch):
     async def no_sleep(_):
         pass
 
-    monkeypatch.setattr(kitsu.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(http.asyncio, "sleep", no_sleep)
     calls = []
 
     def handler(request):
@@ -101,6 +101,6 @@ def test_fetch_gives_up_after_retries(monkeypatch):
     async def no_sleep(_):
         pass
 
-    monkeypatch.setattr(kitsu.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(http.asyncio, "sleep", no_sleep)
     with pytest.raises(httpx.HTTPStatusError):
         _fetch(lambda request: httpx.Response(503), limit=1)

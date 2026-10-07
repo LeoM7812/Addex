@@ -3,6 +3,7 @@
   addex manifest URL... [--registry FILE]   fetch manifests and show how they'd be crawled
   addex registry sync [--registry FILE]     upsert registry addons into the database
   addex seed anime [--limit N]              load the most popular anime from Kitsu
+  addex seed imdb [--limit N] [--type T]    load the most popular movies/series from Cinemeta
 """
 
 import argparse
@@ -12,11 +13,12 @@ from pathlib import Path
 
 import httpx
 
+from addex_core import cinemeta
 from addex_core.db import make_engine, make_sessionmaker
 from addex_core.kitsu import fetch_top_anime
 from addex_core.manifest import Manifest, ManifestError
 from addex_core.registry import fetch_all, load_registry, sync_registry
-from addex_core.titles import upsert_titles
+from addex_core.titles import TitleSeed, upsert_titles
 
 DEFAULT_REGISTRY = Path("registry/addons.yaml")
 USER_AGENT = "addex/0.1"
@@ -78,6 +80,19 @@ async def cmd_registry_sync(args: argparse.Namespace) -> int:
 async def cmd_seed_anime(args: argparse.Namespace) -> int:
     async with _client() as client:
         seeds = await fetch_top_anime(client, limit=args.limit)
+    return await _store_seeds(seeds)
+
+
+async def cmd_seed_imdb(args: argparse.Namespace) -> int:
+    types = ["movie", "series"] if args.type == "both" else [args.type]
+    seeds = []
+    async with _client() as client:
+        for stremio_type in types:
+            seeds += await cinemeta.fetch_top(client, stremio_type, limit=args.limit)
+    return await _store_seeds(seeds)
+
+
+async def _store_seeds(seeds: list[TitleSeed]) -> int:
     engine = make_engine()
     try:
         async with make_sessionmaker(engine).begin() as session:
@@ -113,6 +128,10 @@ def main() -> None:
     p = seed.add_parser("anime", help="most popular anime from Kitsu")
     p.add_argument("--limit", type=int, default=500)
     p.set_defaults(func=cmd_seed_anime)
+    p = seed.add_parser("imdb", help="most popular movies and series (Cinemeta, IMDb IDs)")
+    p.add_argument("--limit", type=int, default=500, help="titles per type")
+    p.add_argument("--type", choices=["movie", "series", "both"], default="both")
+    p.set_defaults(func=cmd_seed_imdb)
 
     args = parser.parse_args()
     # psycopg's async mode can't run on Windows' default Proactor event loop.

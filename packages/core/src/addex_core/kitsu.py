@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 
+from addex_core.http import get_json
 from addex_core.ids import IdScheme
 from addex_core.titles import TitleSeed
 
@@ -60,25 +61,6 @@ def parse_page(data: dict[str, Any]) -> list[TitleSeed]:
     return seeds
 
 
-async def _get_page(client: httpx.AsyncClient, offset: int, retries: int = 4) -> dict:
-    """GET one page, retrying network errors, 429 and 5xx with exponential backoff."""
-    for attempt in range(retries + 1):
-        can_retry = attempt < retries
-        try:
-            resp = await client.get(
-                API, params={**PARAMS, "page[offset]": str(offset)}, timeout=20
-            )
-        except httpx.TransportError:
-            if not can_retry:
-                raise
-        else:
-            if not (can_retry and (resp.status_code == 429 or resp.status_code >= 500)):
-                resp.raise_for_status()
-                return resp.json()
-        await asyncio.sleep(2**attempt)
-    raise AssertionError("unreachable")
-
-
 async def fetch_top_anime(
     client: httpx.AsyncClient, limit: int = 500, delay: float = 0.5
 ) -> list[TitleSeed]:
@@ -86,7 +68,7 @@ async def fetch_top_anime(
     seeds: dict[str, TitleSeed] = {}
     offset = 0
     while len(seeds) < limit:
-        data = await _get_page(client, offset)
+        data = await get_json(client, API, {**PARAMS, "page[offset]": str(offset)})
         if not data["data"]:
             break
         # Offset paging over a live ranking can repeat entries across pages.

@@ -95,21 +95,23 @@ async def cmd_status(args: argparse.Namespace) -> int:
         q = (
             select(
                 Addon.name,
+                Addon.status,
                 func.count().label("checked"),
                 func.count().filter(Availability.has_streams.is_(True)).label("with_streams"),
                 func.count().filter(Availability.status.not_in(ANSWERED)).label("failing"),
                 func.percentile_cont(0.5).within_group(Availability.latency_ms).label("p50"),
             )
             .join(Availability)
-            .group_by(Addon.name)
-            .order_by(Addon.name)
+            .group_by(Addon.name, Addon.status)
+            .order_by(Addon.status, Addon.name)
         )
         async with make_sessionmaker(engine)() as session:
             rows = (await session.execute(q)).all()
-        print(f"\n{'addon':32} {'checked':>8} {'streams':>8} {'failing':>8} {'p50 ms':>8}")
-        for name, checked, with_streams, failing, p50 in rows:
-            print(f"{name[:32]:32} {checked:>8} {with_streams:>8} {failing:>8} "
-                  f"{(round(p50) if p50 is not None else '-'):>8}")
+        print(f"\n{'addon':28} {'status':12} {'checked':>8} {'streams':>8} {'failing':>8} "
+              f"{'p50 ms':>8}")
+        for name, status, checked, with_streams, failing, p50 in rows:
+            print(f"{name[:28]:28} {status.value:12} {checked:>8} {with_streams:>8} "
+                  f"{failing:>8} {(round(p50) if p50 is not None else '-'):>8}")
     finally:
         await redis.aclose()
         await engine.dispose()

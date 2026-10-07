@@ -32,6 +32,7 @@ pytest                                     # DB/Redis tests use addex_test and r
 addex manifest https://example.com/manifest.json   # inspect a manifest, no DB needed
 addex registry sync                        # registry/addons.yaml -> addons table
 addex seed anime --limit 500               # most popular anime from Kitsu, with MAL/AniList IDs
+addex seed imdb --limit 500                # most popular movies + series from Cinemeta (IMDb IDs)
 addex-crawler run                          # see services/crawler/README.md
 ```
 
