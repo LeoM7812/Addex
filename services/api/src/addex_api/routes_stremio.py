@@ -63,12 +63,9 @@ def stream_entry(addon: AddonResult, now: datetime) -> dict:
     if addon.confirmed_at:
         details.append(f"confirmed {_ago(addon.confirmed_at, now)}")
     text = f"Install {addon.name}\n" + " · ".join(details)
-    return {
-        "name": "Addex",
-        "description": text,
-        "title": text,  # pre-v5 clients read `title`
-        "externalUrl": addon.install_url,
-    }
+    # Only `description`: stremio-core aliases `title` to it, and sending both is a
+    # duplicate-field error that makes the client drop the whole response.
+    return {"name": "Addex", "description": text, "externalUrl": addon.install_url}
 
 
 @router.get("/manifest.json")

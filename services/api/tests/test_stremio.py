@@ -53,6 +53,8 @@ def test_stream_lists_addons_to_install(db, world, client_for, path):
     # Addex never hands out a playable source.
     for s in streams:
         assert not {"url", "infoHash", "ytId"} & s.keys()
+        # stremio-core treats `title` as an alias of `description`; both = parse error.
+        assert not {"title", "description"} <= s.keys()
 
 
 @pytest.mark.parametrize(
