@@ -159,15 +159,17 @@ class Availability(Base):
     # The exact Stremio ID sent, e.g. "kitsu:1376:1".
     probe_id: Mapped[str] = mapped_column(Text)
     status: Mapped[CheckStatus] = mapped_column(_enum(CheckStatus, "check_status"))
-    # True for OK, False for EMPTY, null when the addon failed to answer: a timeout says
-    # nothing about whether the title is there.
+    # Result of the last definitive answer (OK -> true, EMPTY -> false). A failed probe
+    # (timeout, 5xx, ...) says nothing about the title, so it updates `status` and leaves
+    # these as they were. Null = the addon has never answered for this title.
     has_streams: Mapped[bool | None] = mapped_column(Boolean)
+    # Streams that carry a playable source (url, infoHash, ...). Informational entries
+    # such as "configure your debrid" are not counted.
     stream_count: Mapped[int | None] = mapped_column(Integer)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     http_status: Mapped[int | None] = mapped_column(SmallInteger)
     last_checked: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # Last time the addon gave a definitive answer (OK or EMPTY). Lets the front-end keep
-    # showing a known result while the addon is temporarily down.
+    # Last time the addon gave a definitive answer (OK or EMPTY).
     last_answered: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     next_check_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)

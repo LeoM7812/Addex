@@ -11,7 +11,7 @@ come from the addon itself, after the user installs it.
 ```
 packages/core/      shared Python: data model, migrations, manifest parser, registry sync,
                     title seeds, Stremio ID helpers, `addex` CLI
-services/crawler/   asyncio + httpx job runner that probes /stream/{type}/{id}.json   (todo)
+services/crawler/   asyncio + httpx job runner that probes /stream/{type}/{id}.json
 services/api/       FastAPI: search + the Addex Stremio addon                         (todo)
 apps/web/           Next.js front-end                                                 (todo)
 registry/           curated list of addon manifest URLs
@@ -22,16 +22,17 @@ registry/           curated list of addon manifest URLs
 ```sh
 docker compose up -d                       # postgres (port 5433) + redis
 python -m venv .venv && . .venv/Scripts/activate   # or .venv/bin/activate
-pip install -e "packages/core[dev]"
+pip install -e "packages/core[dev]" -e "services/crawler[dev]"
 
 cp .env.example .env
 cd packages/core && alembic upgrade head && cd ../..
 
-pytest packages/core                       # DB tests use an `addex_test` database, skipped if unreachable
+pytest                                     # DB/Redis tests use addex_test and redis db 15, skipped if unreachable
 
 addex manifest https://example.com/manifest.json   # inspect a manifest, no DB needed
 addex registry sync                        # registry/addons.yaml -> addons table
 addex seed anime --limit 500               # most popular anime from Kitsu, with MAL/AniList IDs
+addex-crawler run                          # see services/crawler/README.md
 ```
 
 `registry/addons.yaml` is the source of truth for tracked addons: removing an entry marks the

@@ -1,10 +1,26 @@
 # Curated addon registry. One entry per manifest URL.
 # Configured addons (e.g. Torrentio with specific providers) are separate entries,
-# since the config is part of the URL path.
+# since the config is part of the URL path. Removing an entry disables the addon on the
+# next `addex registry sync`.
 #
-# Meta-only addons (Cinemeta, Kitsu) are kept here as parser sanity checks:
-# they declare no `stream` resource and the crawler will never probe them.
+# Before adding an addon, check one /stream/ response by hand: some only work once
+# configured, and some forbid third-party clients (see "excluded" below).
 addons:
+  # meta only: parser sanity checks, never crawled
   - url: https://v3-cinemeta.strem.io/manifest.json
   - url: https://anime-kitsu.strem.fun/manifest.json
+
+  # streams: IMDb + Kitsu (anime)
   - url: https://torrentio.strem.fun/manifest.json
+  - url: https://torrentsdb.com/manifest.json
+  - url: https://addon.peerflix.mov/manifest.json
+
+  # streams: IMDb only (anime without an IMDb ID is skipped)
+  - url: https://thepiratebay-plus.strem.fun/manifest.json
+
+# excluded (checked 2026-10-07):
+#   watchhub.strem.io            responses state "for use only by clients authorized in
+#                                writing by Stremio"
+#   comet.elfhosted.com          403 without configuration
+#   mediafusion.elfhosted.com    empty for everything without configuration
+#   jackettio.elfhosted.com      returns a "configure this addon" placeholder stream

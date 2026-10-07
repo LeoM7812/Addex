@@ -128,7 +128,11 @@ class Manifest:
         return any(s.accepts(stremio_type, stremio_id) for s in self.stream_scopes)
 
     def stream_url(self, stremio_type: str, stremio_id: str) -> str:
-        return f"{self.base_url}/stream/{quote(stremio_type, safe='')}/{quote(stremio_id, safe=':')}.json"
+        return stream_url(self.base_url, stremio_type, stremio_id)
+
+
+def stream_url(base_url: str, stremio_type: str, stremio_id: str) -> str:
+    return f"{base_url}/stream/{quote(stremio_type, safe='')}/{quote(stremio_id, safe=':')}.json"
 
 
 def normalize_manifest_url(url: str) -> str:
