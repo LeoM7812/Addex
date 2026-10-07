@@ -1,13 +1,29 @@
-"""addex-manifest: fetch manifests and print what the crawler would do with them."""
+"""addex: maintenance commands.
+
+  addex manifest URL... [--registry FILE]   fetch manifests and show how they'd be crawled
+  addex registry sync [--registry FILE]     upsert registry addons into the database
+  addex seed anime [--limit N]              load the most popular anime from Kitsu
+"""
 
 import argparse
 import asyncio
+import sys
 from pathlib import Path
 
 import httpx
 
-from addex_core.manifest import Manifest, ManifestError, fetch_manifest
-from addex_core.registry import load_registry
+from addex_core.db import make_engine, make_sessionmaker
+from addex_core.kitsu import fetch_top_anime
+from addex_core.manifest import Manifest, ManifestError
+from addex_core.registry import fetch_all, load_registry, sync_registry
+from addex_core.titles import upsert_titles
+
+DEFAULT_REGISTRY = Path("registry/addons.yaml")
+USER_AGENT = "addex/0.1"
+
+
+def _client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(headers={"User-Agent": USER_AGENT})
 
 
 def _describe(m: Manifest) -> str:
@@ -24,36 +40,84 @@ def _describe(m: Manifest) -> str:
     return "\n".join(lines)
 
 
-async def _run(urls: list[str]) -> int:
-    failures = 0
-    async with httpx.AsyncClient(headers={"User-Agent": "addex/0.1"}) as client:
-        results = await asyncio.gather(
-            *(fetch_manifest(client, u) for u in urls), return_exceptions=True
-        )
-    for url, result in zip(urls, results):
-        if isinstance(result, ManifestError):
-            failures += 1
-            print(f"FAIL {result}\n")
-        elif isinstance(result, BaseException):
-            raise result
-        else:
-            print(_describe(result) + "\n")
+async def cmd_manifest(args: argparse.Namespace) -> int:
+    urls = list(args.urls) + (load_registry(args.registry) if args.registry else [])
+    if not urls:
+        print("give manifest URLs or --registry", file=sys.stderr)
+        return 2
+    async with _client() as client:
+        results = await fetch_all(client, urls)
+    for result in results:
+        print(f"FAIL {result}\n" if isinstance(result, ManifestError) else _describe(result) + "\n")
+    failures = sum(isinstance(r, ManifestError) for r in results)
     print(f"{len(urls) - failures}/{len(urls)} manifests OK")
     return 1 if failures else 0
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(prog="addex-manifest", description=__doc__)
-    parser.add_argument("urls", nargs="*", help="manifest URLs")
-    parser.add_argument("--registry", type=Path, help="registry YAML file")
-    args = parser.parse_args()
+async def cmd_registry_sync(args: argparse.Namespace) -> int:
+    urls = load_registry(args.registry)
+    async with _client() as client:
+        results = await fetch_all(client, urls)
+    engine = make_engine()
+    try:
+        async with make_sessionmaker(engine).begin() as session:
+            report = await sync_registry(session, urls, results)
+    finally:
+        await engine.dispose()
+    for url, error in report.failed:
+        print(f"FAIL {error}")
+    for url in report.disabled:
+        print(f"disabled (not in registry): {url}")
+    print(
+        f"{len(report.added)} added, {len(report.updated)} updated, "
+        f"{len(report.failed)} failed, {len(report.disabled)} disabled"
+    )
+    return 1 if report.failed else 0
 
-    urls = list(args.urls)
-    if args.registry:
-        urls += load_registry(args.registry)
-    if not urls:
-        parser.error("give manifest URLs or --registry")
-    raise SystemExit(asyncio.run(_run(urls)))
+
+async def cmd_seed_anime(args: argparse.Namespace) -> int:
+    async with _client() as client:
+        seeds = await fetch_top_anime(client, limit=args.limit)
+    engine = make_engine()
+    try:
+        async with make_sessionmaker(engine).begin() as session:
+            report = await upsert_titles(session, seeds)
+    finally:
+        await engine.dispose()
+    for scheme, value, owner in report.id_conflicts:
+        print(f"skipped {scheme}:{value}, already attached to title {owner}")
+    print(f"{len(seeds)} fetched: {report.added} added, {report.updated} updated")
+    return 0
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="addex", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(required=True, metavar="command")
+
+    p = sub.add_parser("manifest", help="fetch manifests and show how they'd be crawled")
+    p.add_argument("urls", nargs="*", help="manifest URLs")
+    p.add_argument("--registry", type=Path, help="also check every URL in this registry")
+    p.set_defaults(func=cmd_manifest)
+
+    registry = sub.add_parser("registry", help="addon registry").add_subparsers(
+        required=True, metavar="action"
+    )
+    p = registry.add_parser("sync", help="upsert registry addons into the database")
+    p.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
+    p.set_defaults(func=cmd_registry_sync)
+
+    seed = sub.add_parser("seed", help="load titles").add_subparsers(
+        required=True, metavar="source"
+    )
+    p = seed.add_parser("anime", help="most popular anime from Kitsu")
+    p.add_argument("--limit", type=int, default=500)
+    p.set_defaults(func=cmd_seed_anime)
+
+    args = parser.parse_args()
+    # psycopg's async mode can't run on Windows' default Proactor event loop.
+    loop_factory = asyncio.SelectorEventLoop if sys.platform == "win32" else None
+    raise SystemExit(asyncio.run(args.func(args), loop_factory=loop_factory))
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from addex_core.ids import IdScheme
@@ -50,7 +50,7 @@ class AddonStatus(StrEnum):
     NEEDS_CONFIG = "needs_config"
     # Manifest could not be fetched or parsed on the last attempt.
     BROKEN = "broken"
-    # Manually excluded from crawling.
+    # No longer listed in registry/addons.yaml.
     DISABLED = "disabled"
 
 
@@ -105,6 +105,8 @@ class Title(Base):
     # Stremio type used when probing: "movie" or "series".
     type: Mapped[str] = mapped_column(Text)
     name: Mapped[str] = mapped_column(Text)
+    # Alternative titles for search: romaji, English, Japanese, ...
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
     year: Mapped[int | None] = mapped_column(SmallInteger)
     is_anime: Mapped[bool] = mapped_column(Boolean, default=False)
     poster: Mapped[str | None] = mapped_column(Text)

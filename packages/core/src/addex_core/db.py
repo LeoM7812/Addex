@@ -2,7 +2,7 @@ import os
 
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
-DEFAULT_DATABASE_URL = "postgresql+psycopg://addex:addex@localhost:5432/addex"
+DEFAULT_DATABASE_URL = "postgresql+psycopg://addex:addex@localhost:5433/addex"
 
 
 def database_url() -> str:
