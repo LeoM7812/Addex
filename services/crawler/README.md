@@ -21,7 +21,11 @@ addex-crawler status                     # queue sizes and per-addon results
   A per-pair lock key stops the same pair being queued twice; queues are capped per host.
 - **Worker** (`worker.py`): one loop per host with its own rate limit (default 1 req/s),
   concurrency cap (2), and circuit breaker (opens after 5 consecutive timeouts/5xx, 30 s
-  cooldown doubling to 30 min). A 429 pauses the host for `Retry-After` and requeues the job.
+  cooldown doubling to 30 min). A 429 pauses the host for `Retry-After`, requeues the job
+  and doubles that host's request interval (up to 60 s); 20 good answers in a row bring
+  it back down by 20% at a time.
+- **Demand** (`demand.py`): titles opened in Stremio (noted by the API) are created from
+  Cinemeta or Kitsu if unknown, and their due probes go to the front of each host queue.
 - **Results** (`results.py`): a failed probe updates `status` but keeps the last definitive
   `has_streams`/`stream_count`. Answers are refreshed every 6 h for the top 50 titles,
   12 h up to rank 200, 1 day up to 1000, 3 days otherwise; failures retry after 15 min,
