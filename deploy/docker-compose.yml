@@ -16,6 +16,7 @@ x-app: &app
   environment:
     ADDEX_DATABASE_URL: postgresql+psycopg://addex:${POSTGRES_PASSWORD}@postgres:5432/addex
     ADDEX_REDIS_URL: redis://redis:6379/0
+    ADDEX_CONTACT_EMAIL: ${ADDEX_CONTACT_EMAIL:-}
 
 services:
   postgres:
@@ -50,7 +51,7 @@ services:
 
   api:
     <<: *app
-    command: ["addex-api", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["addex-api", "--host", "0.0.0.0", "--port", "8000", "--behind-proxy"]
     depends_on:
       migrate:
         condition: service_completed_successfully

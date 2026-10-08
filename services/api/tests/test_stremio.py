@@ -32,7 +32,7 @@ def _get(db, world, client_for, path):
 
 def test_manifest(db, world, client_for):
     body = _get(db, world, client_for, "/manifest.json").json()
-    assert body["resources"] == ["stream"] and body["catalogs"] == []
+    assert body["catalogs"] == []  # no title catalogs; full checks in test_addon_features
 
 
 @pytest.mark.parametrize(
@@ -50,7 +50,7 @@ def test_stream_lists_addons_to_install(db, world, client_for, path):
     ]
     assert streams[0]["description"] == "Install Torrentio\n30 streams · P2P · confirmed 1 h ago"
     # TPB's newest check (1 h ago) was an empty entry; its streams were confirmed 50 h ago.
-    assert streams[1]["description"].endswith("5 streams · P2P · confirmed 2 days ago")
+    assert streams[1]["description"].endswith("5 streams · confirmed 2 days ago")
     # Addex never hands out a playable source.
     for s in streams:
         assert not {"url", "infoHash", "ytId"} & s.keys()

@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from addex_api.deps import get_session
-from addex_api.queries import search_titles, title_group
-from addex_api.schemas import SearchHitOut, TitleDetailOut
+from addex_api.queries import addon_stats, search_titles, title_group
+from addex_api.schemas import AddonSummaryOut, SearchHitOut, TitleDetailOut
 
 router = APIRouter(prefix="/api")
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -30,3 +30,9 @@ async def title(session: Session, title_id: int):
     if group is None:
         raise HTTPException(404, "title not found")
     return TitleDetailOut.of(group)
+
+
+@router.get("/addons", response_model=list[AddonSummaryOut])
+async def addons(session: Session):
+    """Active stream addons with their measured coverage, best first."""
+    return [AddonSummaryOut.of(s) for s in await addon_stats(session)]

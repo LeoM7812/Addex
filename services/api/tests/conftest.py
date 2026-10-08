@@ -32,12 +32,13 @@ def _client_for(session, demand: list | None = None) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
 
 
-def _addon(name, status=AddonStatus.ACTIVE, p2p=True):
+def _addon(name, status=AddonStatus.ACTIVE, p2p=False, p2p_observed=False):
     host = name.lower().replace(" ", "")
     return Addon(
         manifest_url=f"https://{host}.example/manifest.json", base_url=f"https://{host}.example",
-        manifest_id=host, name=name, version="1", stream_scopes=[], p2p=p2p, adult=False,
-        manifest={}, status=status,
+        manifest_id=host, name=name, version="1", stream_scopes=[], p2p=p2p,
+        p2p_observed=p2p_observed, adult=False,
+        manifest={"id": host, "name": name, "description": f"{name} addon"}, status=status,
     )
 
 
@@ -70,7 +71,8 @@ def world():
     """Builds a small catalogue in the session and returns its objects by name."""
 
     async def build(session):
-        torrentio, tpb = _addon("Torrentio"), _addon("TPB Plus")
+        # Torrentio doesn't declare P2P but the crawler saw torrents; TPB is direct links.
+        torrentio, tpb = _addon("Torrentio", p2p_observed=True), _addon("TPB Plus")
         gone = _addon("Gone", status=AddonStatus.DISABLED)
         aot = _title("Attack on Titan", rank=40, imdb="tt2560140")
         s1 = _title("Attack on Titan", rank=1, parent=aot,

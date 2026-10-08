@@ -7,14 +7,16 @@ entries under an IMDb series). Only `active` addons are ever reported.
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from addex_core.ids import IdScheme
 from addex_core.manifest import install_url, web_install_url
-from addex_core.models import Addon, AddonStatus, Availability, Title, TitleId
+from addex_core.models import Addon, AddonStatus, Availability, CheckStatus, Title, TitleId
 
 FUZZY_THRESHOLD = 0.6
+# Checks an addon needs before its coverage percentage is trusted for ranking.
+MIN_SAMPLE = 10
 
 SEARCH_SQL = text("""
 WITH hits AS (
@@ -172,7 +174,7 @@ async def title_group(session: AsyncSession, title_id: int) -> TitleGroup | None
             id=addon.id, name=addon.name, description=addon.description, logo=addon.logo,
             manifest_url=addon.manifest_url, install_url=install_url(addon.manifest_url),
             web_install_url=web_install_url(addon.manifest_url),
-            p2p=addon.p2p,
+            p2p=addon.p2p or addon.p2p_observed,
         ))
         result.entries.append(EntryResult(
             title_id=avail.title_id, probe_id=avail.probe_id, status=avail.status.value,
@@ -192,3 +194,60 @@ async def title_id_for(session: AsyncSession, scheme: IdScheme, value: str) -> i
         select(TitleId.title_id).where(TitleId.scheme == scheme, TitleId.value == value)
     )
 
+
+
+@dataclass
+class AddonStats:
+    """An active stream addon with its measured coverage."""
+
+    addon: Addon
+    answered: int  # titles it gave a definitive answer for
+    with_streams: int
+    anime_answered: int
+    anime_with_streams: int
+
+    @property
+    def p2p(self) -> bool:
+        return self.addon.p2p or self.addon.p2p_observed
+
+    @property
+    def coverage(self) -> float:
+        return self.with_streams / self.answered if self.answered else 0.0
+
+    @property
+    def anime_coverage(self) -> float:
+        return self.anime_with_streams / self.anime_answered if self.anime_answered else 0.0
+
+    def rank_key(self, anime: bool) -> tuple:
+        """Best coverage first, but a percentage from a handful of checks ("50% of 2")
+        ranks after every addon with a real sample."""
+        answered = self.anime_answered if anime else self.answered
+        coverage = self.anime_coverage if anime else self.coverage
+        with_streams = self.anime_with_streams if anime else self.with_streams
+        return (answered < MIN_SAMPLE, -coverage, -with_streams, self.addon.name)
+
+
+async def addon_stats(session: AsyncSession) -> list[AddonStats]:
+    """Active addons that serve streams, best coverage first."""
+    answered = Availability.status.in_((CheckStatus.OK, CheckStatus.EMPTY))
+    anime = Title.is_anime.is_(True)
+    has = Availability.has_streams.is_(True)
+
+    def count_if(cond):
+        return func.count(case((cond, 1)))
+
+    rows = await session.execute(
+        select(
+            Addon,
+            count_if(answered),
+            count_if(answered & has),
+            count_if(answered & anime),
+            count_if(answered & anime & has),
+        )
+        .outerjoin(Availability, Availability.addon_id == Addon.id)
+        .outerjoin(Title, Title.id == Availability.title_id)
+        .where(Addon.status == AddonStatus.ACTIVE)
+        .group_by(Addon.id)
+    )
+    stats = [AddonStats(a, *counts) for a, *counts in rows]
+    return sorted(stats, key=lambda s: s.rank_key(anime=False))

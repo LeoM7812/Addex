@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Addex</title>
+<link rel="icon" href="/static/logo.png">
+<style>
+  :root {
+    --bg: #0b0b14; --panel: rgba(255,255,255,0.05); --border: rgba(255,255,255,0.10);
+    --text: #ececf4; --muted: #a2a2b8; --accent: #7b61ff; --accent-hover: #8f79ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); background: var(--bg) url(/static/background.png) center top / cover fixed;
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 680px; margin: 0 auto; padding: 48px 16px 64px; }
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+  header img { width: 56px; height: 56px; }
+  h1 { margin: 0; font-size: 2rem; letter-spacing: -0.02em; }
+  .tagline { color: var(--muted); margin: 0 0 32px; }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 20px; backdrop-filter: blur(6px); }
+  h2 { margin: 0 0 4px; font-size: 1.1rem; }
+  .hint { color: var(--muted); font-size: 0.9rem; margin: 0 0 16px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .btn { display: inline-block; padding: 10px 18px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1px solid var(--border); color: var(--text); background: transparent; cursor: pointer; font-size: 0.95rem; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent-hover); }
+  .btn:not(.primary):hover { background: rgba(255,255,255,0.06); }
+  .url { display: flex; gap: 8px; }
+  .url input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(0,0,0,0.35); color: var(--text); font: 0.85rem ui-monospace, monospace; }
+  .note { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
+  .addon { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .addon:first-of-type { border-top: 0; }
+  .addon img { width: 36px; height: 36px; border-radius: 8px; object-fit: contain; background: rgba(255,255,255,0.06); }
+  .addon .name { font-weight: 600; }
+  .addon .stats { color: var(--muted); font-size: 0.85rem; }
+  .addon label { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85rem; white-space: nowrap; cursor: pointer; }
+  .toggle { display: flex; align-items: center; gap: 8px; margin-top: 14px; cursor: pointer; }
+  .tag { font-size: 0.7rem; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted); margin-left: 6px; }
+  footer { color: var(--muted); font-size: 0.85rem; text-align: center; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="/static/logo.png" alt="">
+    <h1>Addex</h1>
+  </header>
+  <p class="tagline">Finds which Stremio addons have streams for what you're watching, and shows them right in the stream list with an install link.</p>
+
+  <section>
+    <h2>Install</h2>
+    <p class="hint">Add Addex to Stremio. Open any movie or episode and look for the <b>Addex</b> entries; browse the best addons under <b>Addons</b>, catalog <b>Addex</b>.</p>
+    <div class="buttons">
+      <a class="btn primary" id="install-app" href="#">Install in Stremio</a>
+      <a class="btn" id="install-web" href="#" target="_blank" rel="noopener">Install via Stremio Web</a>
+    </div>
+    <div class="url">
+      <input id="manifest-url" readonly aria-label="Addon URL">
+      <button class="btn" id="copy" type="button">Copy</button>
+    </div>
+    <p class="note" id="http-note" hidden>This server runs over plain HTTP, which the Stremio app's install link can't use: install via Stremio Web or paste the URL into Stremio's addon search.</p>
+  </section>
+
+  <section>
+    <h2>Personalize</h2>
+    <p class="hint">Tick the addons you already have and Addex will stop suggesting them. Your choices are stored in the install URL above, so reinstall after changing them.</p>
+    <div id="addons"><p class="hint">Loading addons…</p></div>
+    <label class="toggle"><input type="checkbox" id="hide-p2p"> Hide P2P (torrent) addons</label>
+  </section>
+
+  <footer>
+    Addex only records whether an addon answers for a title. It never hosts, stores or returns streams.
+    · <a href="/docs">API</a>
+  </footer>
+</main>
+<script>
+  const initial = __INITIAL_CONFIG__;
+  const have = new Set(initial ? initial.have : []);
+  const hideP2p = document.getElementById("hide-p2p");
+  hideP2p.checked = initial ? initial.hide_p2p : false;
+
+  function encodeConfig() {
+    if (have.size === 0 && !hideP2p.checked) return null;
+    const json = JSON.stringify({ have: [...have].sort((a, b) => a - b), p2p: !hideP2p.checked });
+    return btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function update() {
+    const config = encodeConfig();
+    const path = (config ? "/" + config : "") + "/manifest.json";
+    const manifestUrl = location.origin + path;
+    const web = "https://web.stremio.com/#/addons?addon=" + encodeURIComponent(manifestUrl);
+    const secure = location.protocol === "https:";
+    document.getElementById("manifest-url").value = manifestUrl;
+    document.getElementById("install-web").href = web;
+    document.getElementById("install-app").href = secure ? "stremio://" + location.host + path : web;
+    document.getElementById("http-note").hidden = secure;
+  }
+
+  function pct(x) { return Math.round(x * 100) + "%"; }
+
+  function row(addon) {
+    const div = document.createElement("div");
+    div.className = "addon";
+    const img = document.createElement("img");
+    img.alt = "";
+    if (addon.logo) img.src = addon.logo;
+    const info = document.createElement("div");
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = addon.name;
+    if (addon.p2p) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = "P2P";
+      name.append(tag);
+    }
+    const stats = document.createElement("div");
+    stats.className = "stats";
+    stats.textContent = addon.titles_checked
+      ? `Streams for ${pct(addon.coverage)} of ${addon.titles_checked} titles checked`
+      : "Not checked yet";
+    info.append(name, stats);
+    const label = document.createElement("label");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = have.has(addon.id);
+    box.addEventListener("change", () => { box.checked ? have.add(addon.id) : have.delete(addon.id); update(); });
+    label.append(box, "I have it");
+    div.append(img, info, label);
+    return div;
+  }
+
+  hideP2p.addEventListener("change", update);
+  document.getElementById("copy").addEventListener("click", async (e) => {
+    try { await navigator.clipboard.writeText(document.getElementById("manifest-url").value); e.target.textContent = "Copied"; }
+    catch { document.getElementById("manifest-url").select(); }
+  });
+
+  fetch("/api/addons").then(r => r.json()).then(addons => {
+    const list = document.getElementById("addons");
+    list.replaceChildren(...addons.map(row));
+    if (!addons.length) list.innerHTML = '<p class="hint">No addons indexed yet.</p>';
+  }).catch(() => {
+    document.getElementById("addons").innerHTML = '<p class="hint">Couldn\'t load the addon list.</p>';
+  });
+  update();
+</script>
+</body>
+</html>

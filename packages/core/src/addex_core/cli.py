@@ -5,6 +5,7 @@
   addex seed anime [--limit N]              load the most popular anime from Kitsu
   addex seed imdb [--limit N] [--type T]    load the most popular movies/series from Cinemeta
   addex link anime                          group Kitsu entries under their IMDb title
+  addex publish URL                         list an addon in Stremio's community catalog
 """
 
 import argparse
@@ -18,7 +19,7 @@ from addex_core import animelists, cinemeta
 from addex_core.linking import link_anime
 from addex_core.db import make_engine, make_sessionmaker
 from addex_core.kitsu import fetch_top_anime
-from addex_core.manifest import Manifest, ManifestError
+from addex_core.manifest import Manifest, ManifestError, fetch_manifest, normalize_manifest_url
 from addex_core.registry import fetch_all, load_registry, sync_registry
 from addex_core.titles import TitleSeed, upsert_titles
 
@@ -94,6 +95,33 @@ async def cmd_seed_imdb(args: argparse.Namespace) -> int:
     return await _store_seeds(seeds)
 
 
+CENTRAL_API = "https://api.strem.io/api/addonPublish"
+
+
+async def cmd_publish(args: argparse.Namespace) -> int:
+    """What the official SDK's publishToCentral does: Stremio's API fetches the manifest
+    and lists the addon in the community catalog."""
+    url = normalize_manifest_url(args.url)
+    if not url.startswith("https://"):
+        print("the addon must be served over https to be listed", file=sys.stderr)
+        return 2
+    async with _client() as client:
+        try:
+            manifest = await fetch_manifest(client, url)  # fail early if it isn't reachable
+        except ManifestError as e:
+            print(f"not publishing: {e}", file=sys.stderr)
+            return 1
+        print(f"publishing {manifest.name} {manifest.version} ({url})")
+        resp = await client.post(CENTRAL_API, json={"transportUrl": url, "transportName": "http"},
+                                 timeout=30)
+    body = resp.json()
+    if resp.status_code != 200 or body.get("error"):
+        print(f"failed: HTTP {resp.status_code} {body.get('error') or body}", file=sys.stderr)
+        return 1
+    print(f"published: {body.get('result')}")
+    return 0
+
+
 async def cmd_link_anime(args: argparse.Namespace) -> int:
     async with _client() as client:
         mapping = await animelists.fetch_kitsu_to_imdb(client)
@@ -161,6 +189,10 @@ def main() -> None:
     )
     p = link.add_parser("anime", help="group Kitsu entries under their IMDb title")
     p.set_defaults(func=cmd_link_anime)
+
+    p = sub.add_parser("publish", help="list an addon in Stremio's community catalog")
+    p.add_argument("url", help="public https manifest URL")
+    p.set_defaults(func=cmd_publish)
 
     args = parser.parse_args()
     # psycopg's async mode can't run on Windows' default Proactor event loop.

@@ -35,6 +35,7 @@ addex registry sync                        # registry/addons.yaml -> addons tabl
 addex seed anime --limit 500               # most popular anime from Kitsu, with MAL/AniList IDs
 addex seed imdb --limit 500                # most popular movies + series from Cinemeta (IMDb IDs)
 addex link anime                           # group Kitsu entries under their IMDb title (run after seeding)
+addex publish https://<host>/manifest.json # list Addex in Stremio's community catalog (public https only)
 addex-crawler run                          # see services/crawler/README.md
 addex-api                                  # see services/api/README.md
 ```

@@ -47,7 +47,7 @@ sudo netfilter-persistent save
 ```sh
 git clone <repo-url> addex && cd addex
 cp deploy/.env.example deploy/.env
-nano deploy/.env        # ADDEX_DOMAIN=addex.duckdns.org, POSTGRES_PASSWORD=<openssl rand -hex 24>
+nano deploy/.env        # ADDEX_DOMAIN, POSTGRES_PASSWORD, optionally ADDEX_CONTACT_EMAIL
 
 alias addex-compose='docker compose -f deploy/docker-compose.yml --env-file deploy/.env'
 addex-compose up -d --build
@@ -62,8 +62,19 @@ addex-compose run --rm crawler addex seed imdb
 addex-compose run --rm crawler addex link anime
 ```
 
-Check `https://addex.duckdns.org/manifest.json`, then install that URL in Stremio. Titles
-outside the seeds are indexed the first time someone opens them.
+Open `https://addex.duckdns.org` and install from there. Titles outside the seeds are
+indexed the first time someone opens them.
+
+## 5. List it in Stremio's community catalog
+
+Once the public URL works, this does what the official SDK's `publishToCentral` does:
+Stremio's API fetches the manifest and lists Addex among the community addons.
+
+```sh
+addex-compose run --rm crawler addex publish https://addex.duckdns.org/manifest.json
+```
+
+Run it again after changing the manifest (new version) to refresh the listing.
 
 ## Operating
 

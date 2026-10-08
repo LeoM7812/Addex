@@ -2,7 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from addex_api.queries import AddonResult, SearchHit, TitleGroup
+from addex_api.queries import AddonResult, AddonStats, SearchHit, TitleGroup
+from addex_core.manifest import install_url, web_install_url
 from addex_core.models import Title
 
 
@@ -87,3 +88,31 @@ class TitleDetailOut(BaseModel):
     def of(cls, g: TitleGroup) -> "TitleDetailOut":
         return cls(title=TitleOut.of(g.root), entries=[TitleOut.of(e) for e in g.entries],
                    addons=[AddonOut.of(a) for a in g.addons])
+
+
+class AddonSummaryOut(BaseModel):
+    id: int
+    name: str
+    description: str | None
+    logo: str | None
+    manifest_url: str
+    install_url: str
+    web_install_url: str
+    p2p: bool
+    titles_checked: int
+    titles_with_streams: int
+    coverage: float
+    anime_checked: int
+    anime_coverage: float
+
+    @classmethod
+    def of(cls, s: AddonStats) -> "AddonSummaryOut":
+        a = s.addon
+        return cls(
+            id=a.id, name=a.name, description=a.description, logo=a.logo,
+            manifest_url=a.manifest_url, install_url=install_url(a.manifest_url),
+            web_install_url=web_install_url(a.manifest_url), p2p=s.p2p,
+            titles_checked=s.answered, titles_with_streams=s.with_streams,
+            coverage=round(s.coverage, 4), anime_checked=s.anime_answered,
+            anime_coverage=round(s.anime_coverage, 4),
+        )

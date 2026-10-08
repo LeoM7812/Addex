@@ -1,12 +1,14 @@
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from addex_api import __version__, routes_api, routes_stremio
+from addex_api import __version__, routes_api, routes_pages, routes_stremio
 from addex_core.db import make_engine, make_sessionmaker
 
 
@@ -39,8 +41,10 @@ def create_app(sessionmaker: async_sessionmaker | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_private_network=True
     )
+    app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
     app.include_router(routes_api.router)
     app.include_router(routes_stremio.router)
+    app.include_router(routes_pages.router)
 
     @app.get("/health")
     async def health():
