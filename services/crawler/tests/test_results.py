@@ -54,4 +54,11 @@ def test_failure_keeps_last_answer(db):
         )
         assert (row.has_streams, row.stream_count, row.consecutive_failures) == (False, 0, 0)
 
+        assert not addon.p2p_observed
+        await record_result(
+            session, job, ProbeResult(CheckStatus.OK, 200, 200, stream_count=1, torrent=True), t1
+        )
+        await session.refresh(addon)
+        assert addon.p2p_observed
+
     db(scenario)

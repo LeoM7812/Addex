@@ -1,13 +1,15 @@
 """Stremio addon manifest parsing.
 
 Reduces a manifest to what the crawler needs: can this addon be asked for streams of a
-given (type, id)? Follows the Stremio addon protocol:
+given (type, id)? Mirrors stremio-core's `Manifest::is_resource_supported`, since the
+client decides which requests an addon ever receives:
 
 - `resources` is a list of either names (`"stream"`) or objects
   (`{"name": "stream", "types": [...], "idPrefixes": [...]}`).
-- A bare name inherits the manifest's top-level `types` and `idPrefixes`.
-- No `idPrefixes` means the resource accepts any ID of its types.
-- Stremio matches IDs by `id.startswith(prefix)`.
+- A bare name uses the manifest's top-level `types` and `idPrefixes`.
+- An object uses only its own: no `types` means the resource is never requested, no
+  `idPrefixes` means any ID. Nothing is inherited from the top level.
+- Absent or empty `idPrefixes` both accept any ID; otherwise `id.startswith(prefix)`.
 """
 
 from dataclasses import dataclass
@@ -174,16 +176,11 @@ def _stream_scopes(raw: _RawManifest) -> tuple[StreamScope, ...]:
         else:
             if res.name != "stream":
                 continue
-            types = res.types if res.types is not None else raw.types
-            prefixes = res.id_prefixes if res.id_prefixes is not None else raw.id_prefixes
+            types, prefixes = res.types, res.id_prefixes
         if not types:
             continue
-        # Like stremio-core: an absent idPrefixes accepts any ID, an empty list accepts none.
         scopes.append(
-            StreamScope(
-                types=frozenset(types),
-                id_prefixes=tuple(prefixes) if prefixes is not None else None,
-            )
+            StreamScope(types=frozenset(types), id_prefixes=tuple(prefixes) if prefixes else None)
         )
     return tuple(scopes)
 

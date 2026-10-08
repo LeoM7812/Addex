@@ -26,6 +26,7 @@ class ProbeResult:
     http_status: int | None = None
     stream_count: int | None = None
     retry_after: float | None = None  # seconds, from a 429
+    torrent: bool = False  # at least one stream is a torrent (has an infoHash)
 
     @property
     def answered(self) -> bool:
@@ -52,6 +53,11 @@ def count_streams(body: object) -> int | None:
     if not isinstance(body, dict) or not isinstance(body.get("streams"), list):
         return None
     return sum(1 for s in body["streams"] if isinstance(s, dict) and SOURCE_KEYS & s.keys())
+
+
+def has_torrent(body: dict) -> bool:
+    """Whether any stream is a torrent. Only the key's presence is checked."""
+    return any(isinstance(s, dict) and "infoHash" in s for s in body["streams"])
 
 
 def _retry_after(resp: httpx.Response) -> float | None:
@@ -81,10 +87,11 @@ async def probe(client: httpx.AsyncClient, url: str, timeout: float = 10.0) -> P
             retry_after=_retry_after(resp) if resp.status_code == 429 else None,
         )
     try:
-        count = count_streams(resp.json())
+        body = resp.json()
     except ValueError:
-        count = None
+        body = None
+    count = count_streams(body)
     if count is None:
         return ProbeResult(CheckStatus.INVALID, latency, 200)
     status = CheckStatus.OK if count else CheckStatus.EMPTY
-    return ProbeResult(status, latency, 200, stream_count=count)
+    return ProbeResult(status, latency, 200, stream_count=count, torrent=has_torrent(body))

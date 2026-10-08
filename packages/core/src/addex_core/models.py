@@ -18,6 +18,7 @@ from sqlalchemy import (
     SmallInteger,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
@@ -80,6 +81,9 @@ class Addon(Base):
     # [{"types": ["movie", "series"], "id_prefixes": ["tt", "kitsu"] | null}]
     stream_scopes: Mapped[list[dict]] = mapped_column(JSONB, default=list)
     p2p: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Set by the crawler once the addon returns a torrent stream. Many torrent addons
+    # (Torrentio among them) don't declare behaviorHints.p2p.
+    p2p_observed: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     adult: Mapped[bool] = mapped_column(Boolean, default=False)
     # Raw manifest as last fetched. Manifests describe capabilities, not content.
     manifest: Mapped[dict] = mapped_column(JSONB)

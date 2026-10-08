@@ -2,9 +2,10 @@
 
 from datetime import datetime, timedelta
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from addex_core.models import Availability, CheckStatus
+from addex_core.models import Addon, Availability, CheckStatus
 from addex_crawler.probe import ProbeResult
 from addex_crawler.queue import Job
 
@@ -50,5 +51,11 @@ async def record_result(
     row.next_check_at = now + next_check_delay(
         job.popularity_rank, result.answered, row.consecutive_failures
     )
+    if result.torrent:
+        await session.execute(
+            update(Addon)
+            .where(Addon.id == job.addon_id, Addon.p2p_observed.is_(False))
+            .values(p2p_observed=True)
+        )
     await session.flush()
     return row

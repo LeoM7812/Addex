@@ -53,29 +53,32 @@ def test_meta_only_addon_has_no_stream_scopes():
     assert not m.supports_stream("anime", "kitsu:1")
 
 
-def test_object_resource_overrides_and_falls_back():
+def test_object_resource_does_not_inherit_top_level():
     data = {
-        **TORRENTIO_LIKE,
+        **TORRENTIO_LIKE,  # top level: idPrefixes ["tt", "kitsu"]
         "resources": [
             {"name": "stream", "types": ["movie"], "idPrefixes": ["tmdb:"]},
-            {"name": "stream", "types": ["series"]},  # prefixes fall back to top level
+            {"name": "stream", "types": ["series"]},  # no prefixes: any ID, not tt/kitsu
+            {"name": "stream", "idPrefixes": ["yt_id:"]},  # no types: never requested
             {"name": "subtitles", "types": ["movie"]},
         ],
     }
     m = parse_manifest(data, URL)
     assert m.supports_stream("movie", "tmdb:550")
     assert not m.supports_stream("movie", "tt0137523")
-    assert m.supports_stream("series", "tt0944947:1:1")
+    assert m.supports_stream("series", "mal:5114:1")
+    assert not m.supports_stream("channel", "yt_id:abc")
     assert m.stream_types == {"movie", "series"}
 
 
-def test_missing_id_prefixes_accepts_any_id_but_empty_list_accepts_none():
+def test_missing_or_empty_id_prefixes_accept_any_id():
+    # stremio-core: "if prefixes are empty, all ids are supported".
     no_prefixes = {**TORRENTIO_LIKE}
     del no_prefixes["idPrefixes"]
     assert parse_manifest(no_prefixes, URL).supports_stream("movie", "whatever:1")
 
     empty = {**TORRENTIO_LIKE, "idPrefixes": []}
-    assert not parse_manifest(empty, URL).supports_stream("movie", "tt0111161")
+    assert parse_manifest(empty, URL).supports_stream("movie", "whatever:1")
 
 
 def test_flags_and_urls():

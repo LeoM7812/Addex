@@ -52,6 +52,12 @@ def test_probe_statuses(response, status, count):
     assert result.latency_ms is not None
 
 
+def test_torrent_flag():
+    torrent = _probe(lambda r: httpx.Response(200, json={"streams": [{"url": "u"}, {"infoHash": "a"}]}))
+    direct = _probe(lambda r: httpx.Response(200, json={"streams": [{"url": "u"}]}))
+    assert torrent.torrent and not direct.torrent
+
+
 def test_probe_timeout_and_connection_error():
     def timeout(request):
         raise httpx.ReadTimeout("slow")
