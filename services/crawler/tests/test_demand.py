@@ -4,6 +4,7 @@ import httpx
 from redis.asyncio import Redis
 from sqlalchemy import select
 
+from addex_core.animelists import AnimeLists
 from addex_core.demand import DemandRequest, note_demand, pop_demand, seen_key, unknown_key
 from addex_core.ids import IdScheme
 from addex_core.manifest import StreamScope
@@ -18,8 +19,8 @@ TT_ONLY = StreamScope(frozenset({"movie", "series"}), ("tt",))
 
 
 class StubMapping:
-    def __init__(self, data):
-        self.data = data
+    def __init__(self, kitsu_to_imdb=None, mal_to_kitsu=None):
+        self.data = AnimeLists(kitsu_to_imdb or {}, mal_to_kitsu or {})
 
     async def get(self, client):
         return self.data
@@ -60,7 +61,7 @@ def _scenario(redis_url, db, body, handler=_cinemeta_and_kitsu, budget=None):
         redis = Redis.from_url(redis_url, decode_responses=True)
         try:
             async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-                async def handle(req, mapping=StubMapping({})):
+                async def handle(req, mapping=StubMapping()):
                     return await handle_demand(
                         session, redis, client, req, mapping, budget or DiscoveryBudget()
                     )
@@ -123,7 +124,7 @@ def test_unknown_id_is_negatively_cached(db, redis_url):
 
 def test_unsupported_scheme_and_budget(db, redis_url):
     async def body(session, redis, handle):
-        assert (await handle(DemandRequest(IdScheme.MAL, "1", "series"))).status == "unsupported"
+        assert (await handle(DemandRequest(IdScheme.TMDB, "1", "movie"))).status == "unsupported"
         req = DemandRequest(IdScheme.IMDB, "tt9999999", "series")
         await redis.set(seen_key(req.scheme, req.value), 1)
         assert (await handle(req)).status == "over_budget"
@@ -164,7 +165,7 @@ def test_unknown_kitsu_title_is_linked_to_its_imdb_parent(db, redis_url):
         session.add(_addon("a.example", TT_KITSU))
         await session.flush()
         outcome = await handle(DemandRequest(IdScheme.KITSU, "42", "series"),
-                               mapping=StubMapping({"42": "tt5000000"}))
+                               mapping=StubMapping(kitsu_to_imdb={"42": "tt5000000"}))
         assert outcome.status == "created"
         child = await session.scalar(select(Title).where(Title.name == "Anime Show S2"))
         parent = await session.get(Title, child.parent_id)
@@ -191,3 +192,39 @@ def test_priority_enqueue_jumps_the_queue(redis_url):
             await redis.aclose()
 
     run(main())
+
+
+def test_unknown_mal_title_is_created_through_kitsu(db, redis_url):
+    """mal:7 -> Kitsu 42 (anime-lists) -> title from Kitsu, linked to its IMDb parent.
+    Kitsu's own mappings for 42 don't list MAL 7, so it is attached from the request."""
+
+    async def body(session, redis, handle):
+        session.add(_addon("a.example", StreamScope(frozenset({"series"}), ("tt", "kitsu", "mal:"))))
+        await session.flush()
+        mapping = StubMapping(kitsu_to_imdb={"42": "tt5000000"}, mal_to_kitsu={"7": "42"})
+        outcome = await handle(DemandRequest(IdScheme.MAL, "7", "series"), mapping=mapping)
+        assert outcome.status == "created"
+
+        child = await session.scalar(
+            select(Title).join(TitleId).where(TitleId.scheme == IdScheme.MAL, TitleId.value == "7")
+        )
+        assert child.name == "Anime Show S2"
+        assert (await session.get(Title, child.parent_id)).name == "Anime Show"
+        # Kitsu is preferred for anime, so the season is probed by its Kitsu ID.
+        assert sorted(j.probe_id for j in outcome.jobs) == ["kitsu:42:1", "tt5000000:1:1"]
+
+        # Asked again by MAL ID, it is now known directly.
+        again = await handle(DemandRequest(IdScheme.MAL, "7", "series"), mapping=mapping)
+        assert again.status == "known"
+
+    _scenario(redis_url, db, body)
+
+
+def test_mal_id_without_kitsu_entry_is_unknown(db, redis_url):
+    async def body(session, redis, handle):
+        outcome = await handle(DemandRequest(IdScheme.MAL, "999", "series"),
+                               mapping=StubMapping(mal_to_kitsu={"7": "42"}))
+        assert outcome.status == "unknown"
+        assert await redis.exists(unknown_key(IdScheme.MAL, "999"))
+
+    _scenario(redis_url, db, body)

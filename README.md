@@ -27,7 +27,8 @@ them for you:
   addons) and Addex stops suggesting them. The settings live in your install URL, so there
   are no accounts.
 - **Anything you open.** Titles Addex hasn't seen yet are indexed and checked the first
-  time someone opens them; reopen a minute later and the results are there.
+  time someone opens them, whether Stremio identifies them by IMDb, Kitsu or MyAnimeList
+  ID; reopen a minute later and the results are there.
 
 ## Install
 

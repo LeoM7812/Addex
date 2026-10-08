@@ -20,8 +20,9 @@ from addex_core.ids import IdScheme
 QUEUE_KEY = "addex:demand"
 DEDUPE_TTL = 10 * 60
 UNKNOWN_TTL = 24 * 3600
-# IDs the crawler can create titles from.
-DISCOVERABLE = (IdScheme.IMDB, IdScheme.KITSU)
+# IDs the crawler can create titles from: IMDb via Cinemeta, Kitsu via Kitsu, and MAL via
+# its Kitsu entry (anime-lists mapping).
+DISCOVERABLE = (IdScheme.IMDB, IdScheme.KITSU, IdScheme.MAL)
 
 
 @dataclass(frozen=True)

@@ -52,7 +52,7 @@ sequenceDiagram
     participant A as Addex API
     participant R as Redis
     participant C as Crawler
-    participant M as Cinemeta or Kitsu
+    participant M as Cinemeta, Kitsu, anime-lists
     participant X as Indexed addons
     participant P as Postgres
 
@@ -175,7 +175,12 @@ flowchart LR
 
 So each season keeps being probed with its own Kitsu ID, IMDb-only addons still get the
 series, the two seeds never overwrite each other, and search and the addon show one
-result with everything aggregated. Search matches names and aliases (romaji, English,
+result with everything aggregated.
+
+Titles opened in Stremio are created from whichever ID the client sends: IMDb through
+Cinemeta, Kitsu through Kitsu, and MyAnimeList through its Kitsu entry (anime-lists maps
+MAL to Kitsu for about two thirds of MAL entries, which covers the commonly watched ones).
+A MAL request therefore lands in the same group as the Kitsu and IMDb entries. Search matches names and aliases (romaji, English,
 Japanese) of the parent or any child, with trigram similarity for typos.
 
 ## Data model

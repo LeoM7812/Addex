@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
 import httpx
@@ -27,16 +27,17 @@ log = logging.getLogger("addex.crawler")
 
 
 class AnimeMapping:
-    """Kitsu -> IMDb mapping, downloaded on first use and refreshed daily."""
+    """anime-lists mappings (Kitsu -> IMDb, MAL -> Kitsu), downloaded on first use and
+    refreshed daily."""
 
     def __init__(self, max_age: float = 24 * 3600):
         self.max_age = max_age
-        self._data: dict[str, str] = {}
+        self._data = animelists.AnimeLists({}, {})
         self._fetched_at = float("-inf")
 
-    async def get(self, client: httpx.AsyncClient) -> dict[str, str]:
+    async def get(self, client: httpx.AsyncClient) -> animelists.AnimeLists:
         if time.monotonic() - self._fetched_at > self.max_age:
-            self._data = await animelists.fetch_kitsu_to_imdb(client)
+            self._data = await animelists.fetch(client)
             self._fetched_at = time.monotonic()
         return self._data
 
@@ -72,9 +73,20 @@ async def _title_id(session: AsyncSession, scheme: IdScheme, value: str) -> int 
     )
 
 
-async def _discover(client: httpx.AsyncClient, req: DemandRequest) -> TitleSeed | None:
+async def _discover(
+    client: httpx.AsyncClient, req: DemandRequest, mapping: AnimeMapping
+) -> TitleSeed | None:
     if req.scheme is IdScheme.KITSU:
         return await kitsu.fetch_anime(client, req.value)
+    if req.scheme is IdScheme.MAL:
+        # MAL has no API Addex uses; go through the anime's Kitsu entry, which also brings
+        # its other IDs and its IMDb parent.
+        kitsu_id = (await mapping.get(client)).mal_to_kitsu.get(req.value)
+        seed = await kitsu.fetch_anime(client, kitsu_id) if kitsu_id else None
+        if seed is not None and IdScheme.MAL not in seed.ids:
+            # Kitsu doesn't list this MAL ID itself: attach it so the next request finds it.
+            seed = replace(seed, ids={**seed.ids, IdScheme.MAL: req.value})
+        return seed
     first = req.type if req.type in ("movie", "series") else "series"
     return await cinemeta.fetch_meta(
         client, req.value, (first, "movie" if first == "series" else "series")
@@ -103,17 +115,22 @@ async def handle_demand(
             # Let the next request for this title try again.
             await redis.delete(seen_key(req.scheme, req.value))
             return DemandOutcome("over_budget")
-        seed = await _discover(client, req)
+        seed = await _discover(client, req, mapping)
         if seed is None:
             await redis.set(unknown_key(req.scheme, req.value), 1, ex=UNKNOWN_TTL)
             return DemandOutcome("unknown")
         await upsert_titles(session, [seed])
-        if req.scheme is IdScheme.KITSU:
+        if IdScheme.KITSU in seed.ids:
             await link_anime(
-                session, await mapping.get(client),
+                session, (await mapping.get(client)).kitsu_to_imdb,
                 lambda wanted: cinemeta.fetch_metas(client, wanted),
             )
         title_id = await _title_id(session, req.scheme, req.value)
+        if title_id is None and IdScheme.KITSU in seed.ids:
+            # The Kitsu entry already lists a different MAL ID, which wins (one per title).
+            title_id = await _title_id(session, IdScheme.KITSU, seed.ids[IdScheme.KITSU])
+            log.warning("demand %s:%s: Kitsu %s lists another MAL ID; using the Kitsu entry",
+                        req.scheme.value, req.value, seed.ids[IdScheme.KITSU])
         status = "created"
 
     title = await session.get(Title, title_id)

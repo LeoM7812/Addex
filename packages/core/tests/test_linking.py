@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from addex_core.animelists import parse_kitsu_to_imdb
+from addex_core.animelists import parse, parse_kitsu_to_imdb
 from addex_core.ids import IdScheme
 from addex_core.linking import link_anime
 from addex_core.models import Title, TitleId
@@ -16,6 +16,18 @@ def test_parse_kitsu_to_imdb():
         {"kitsu_id": 7442, "imdb_id": ["tt0000000"]},  # duplicate: first wins
     ]
     assert parse_kitsu_to_imdb(entries) == {"7442": "tt2560140", "8671": "tt2560140"}
+
+
+def test_parse_mal_to_kitsu():
+    entries = [
+        {"kitsu_id": 7442, "mal_id": 16498, "imdb_id": ["tt2560140"]},
+        {"kitsu_id": 1, "mal_id": 5, "imdb_id": None},  # no IMDb, still a MAL -> Kitsu pair
+        {"mal_id": 6},  # no Kitsu entry
+        {"kitsu_id": 2, "mal_id": 16498},  # duplicate MAL: first wins
+    ]
+    lists = parse(entries)
+    assert lists.mal_to_kitsu == {"16498": "7442", "5": "1"}
+    assert lists.kitsu_to_imdb == {"7442": "tt2560140"}
 
 
 def _kitsu(kid, name, type_="series"):
