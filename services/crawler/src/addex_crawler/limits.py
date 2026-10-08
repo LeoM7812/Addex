@@ -12,12 +12,37 @@ Clock = Callable[[], float]
 
 
 class RateLimiter:
-    """Spaces request starts at least 1/rate seconds apart."""
+    """Spaces request starts at least `interval` seconds apart, starting at 1/rate.
 
-    def __init__(self, rate: float, clock: Clock = time.monotonic):
-        self.interval = 1.0 / rate
+    Adapts to the host: each 429 doubles the interval (up to `max_interval`), and every
+    `recover_after` consecutive good answers shrink it by 20% back towards 1/rate. A host
+    that rate-limits us settles at the pace it accepts instead of being hit at full rate
+    after every pause."""
+
+    def __init__(
+        self,
+        rate: float,
+        clock: Clock = time.monotonic,
+        max_interval: float = 60.0,
+        recover_after: int = 20,
+    ):
+        self.base_interval = 1.0 / rate
+        self.interval = self.base_interval
+        self.max_interval = max_interval
+        self.recover_after = recover_after
         self.clock = clock
         self._next = 0.0
+        self._ok_streak = 0
+
+    def slow_down(self) -> None:
+        self.interval = min(self.interval * 2, self.max_interval)
+        self._ok_streak = 0
+
+    def record_ok(self) -> None:
+        self._ok_streak += 1
+        if self._ok_streak >= self.recover_after and self.interval > self.base_interval:
+            self.interval = max(self.base_interval, self.interval * 0.8)
+            self._ok_streak = 0
 
     async def acquire(self) -> None:
         now = self.clock()

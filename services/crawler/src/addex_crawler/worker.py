@@ -90,7 +90,9 @@ class HostWorker:
             result = await probe(self.client, job.url, self.config.timeout)
             if result.rate_limited:
                 pause = result.retry_after or self.config.default_retry_after
-                log.warning("%s: 429, pausing %.0fs", self.host, pause)
+                self.limiter.slow_down()
+                log.warning("%s: 429, pausing %.0fs, then 1 request every %.1fs",
+                            self.host, pause, self.limiter.interval)
                 self.breaker.pause(pause)
                 await queue.requeue(self.redis, job)
                 return
@@ -98,6 +100,7 @@ class HostWorker:
                 self.breaker.record_failure()
             else:
                 self.breaker.record_success()
+                self.limiter.record_ok()
             await self.sink(job, result)
             await queue.release(self.redis, job)
             log.info("%s %s %s streams=%s %sms", self.host, job.probe_id,

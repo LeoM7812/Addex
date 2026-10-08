@@ -61,3 +61,20 @@ def test_rate_limiter_spaces_requests(monkeypatch):
 
     asyncio.run(main())
     assert slept == [0.5, 1.0]
+
+
+def test_rate_limiter_adapts_to_429s():
+    limiter = RateLimiter(rate=1, max_interval=8, recover_after=3)
+    for expected in (2, 4, 8, 8):  # doubles per 429, capped
+        limiter.slow_down()
+        assert limiter.interval == expected
+    for _ in range(3):
+        limiter.record_ok()
+    assert limiter.interval == 8 * 0.8  # a streak of good answers speeds up by 20%
+    limiter.slow_down()  # a 429 resets the streak
+    limiter.record_ok()
+    limiter.record_ok()
+    assert limiter.interval == 8
+    for _ in range(60):
+        limiter.record_ok()
+    assert limiter.interval == 1  # never faster than the configured rate
