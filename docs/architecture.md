@@ -118,8 +118,11 @@ and IMDb otherwise. Series are probed through their first episode (`tt0944947:1:
 
 **One queue per host.** A slow or broken host only delays its own queue. Each host gets:
 
-- a **rate limiter**: one request per second by default. Every `429` doubles the interval
-  (up to one a minute); twenty good answers in a row shrink it by 20% again.
+- a **rate limiter**: one request per second by default, one every 5 s in production.
+  Every `429` doubles the interval (up to one a minute); twenty good answers in a row
+  shrink it by 20% again. A `429` without `Retry-After` pauses the host for a minute,
+  doubling with each one in a row up to an hour: some addons keep refusing an IP for as
+  long as requests keep arriving.
 - a **circuit breaker** for hosts that are down:
 
 ```mermaid

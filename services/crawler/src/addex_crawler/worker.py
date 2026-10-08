@@ -30,7 +30,8 @@ class WorkerConfig:
     concurrency: int = 2  # in-flight requests, per host
     timeout: float = 10.0  # per request
     idle_poll: float = 5.0  # BRPOP timeout
-    default_retry_after: float = 60.0  # 429 without a usable Retry-After
+    default_retry_after: float = 60.0  # first pause for a 429 without Retry-After
+    max_retry_after: float = 3600.0  # longest pause after repeated 429s
 
 
 def db_sink(sessionmaker: async_sessionmaker) -> Sink:
@@ -43,6 +44,13 @@ def db_sink(sessionmaker: async_sessionmaker) -> Sink:
                         job.addon_id, job.title_id)
 
     return sink
+
+
+def rate_limit_pause(streak: int, first: float, longest: float) -> float:
+    """Pause after the `streak`-th 429 in a row from a host that gave no Retry-After:
+    doubles each time. Some hosts keep refusing while requests keep arriving, so a fixed
+    pause can mean being refused forever."""
+    return min(first * 2 ** (streak - 1), longest)
 
 
 class HostWorker:
@@ -58,6 +66,7 @@ class HostWorker:
         self.limiter = RateLimiter(config.rate)
         self.breaker = CircuitBreaker()
         self.inflight = 0
+        self.rate_limited_streak = 0
 
     async def run(self, until_empty: bool = False) -> None:
         """Process jobs forever, or until the queue is empty and nothing is in flight."""
@@ -89,13 +98,18 @@ class HostWorker:
         try:
             result = await probe(self.client, job.url, self.config.timeout)
             if result.rate_limited:
-                pause = result.retry_after or self.config.default_retry_after
+                self.rate_limited_streak += 1
+                pause = result.retry_after or rate_limit_pause(
+                    self.rate_limited_streak, self.config.default_retry_after,
+                    self.config.max_retry_after,
+                )
                 self.limiter.slow_down()
                 log.warning("%s: 429, pausing %.0fs, then 1 request every %.1fs",
                             self.host, pause, self.limiter.interval)
                 self.breaker.pause(pause)
                 await queue.requeue(self.redis, job)
                 return
+            self.rate_limited_streak = 0
             if result.host_failure:
                 self.breaker.record_failure()
             else:

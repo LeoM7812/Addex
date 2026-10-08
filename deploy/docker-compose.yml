@@ -60,7 +60,9 @@ services:
 
   crawler:
     <<: *app
-    command: ["addex-crawler", "run"]
+    # One request every 5 s per host: a public index crawling other people's addons
+    # should stay far below what they rate-limit (seen: TorrentsDB, Peerflix).
+    command: ["addex-crawler", "run", "--rate", "0.2"]
     depends_on:
       migrate:
         condition: service_completed_successfully

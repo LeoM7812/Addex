@@ -5,7 +5,7 @@ from addex_core.models import CheckStatus
 from addex_core.testing import run
 from addex_crawler import queue
 from addex_crawler.queue import Job
-from addex_crawler.worker import WorkerConfig, run_worker
+from addex_crawler.worker import WorkerConfig, rate_limit_pause, run_worker
 
 CONFIG = WorkerConfig(rate=1000, concurrency=2, timeout=1, idle_poll=0.1)
 
@@ -79,3 +79,8 @@ def test_worker_requeues_after_429(redis_url):
     _, recorded, _ = run(_crawl(redis_url, [_job(1)], handler))
     assert recorded == [("a.example", 1, CheckStatus.OK, 1)]  # the 429 itself isn't recorded
     assert len(calls) == 2
+
+
+def test_rate_limit_pause_grows_with_consecutive_429s():
+    assert [rate_limit_pause(n, 60, 3600) for n in range(1, 9)] == [
+        60, 120, 240, 480, 960, 1920, 3600, 3600]
