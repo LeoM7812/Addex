@@ -2,6 +2,7 @@
 name = "addex-crawler"
 version = "0.1.0"
 description = "Probes Stremio addons for stream availability and records the results"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "addex-core",

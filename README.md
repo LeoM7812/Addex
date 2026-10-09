@@ -130,3 +130,7 @@ Deploying publicly (Oracle Cloud free tier + DuckDNS + Caddy): **[deploy/README.
 Addex is an index of publicly reachable Stremio addons and of whether they respond for a
 title. It does not host, link to or distribute content. What an addon provides, and
 whether using it is legal where you live, is between you and that addon.
+
+## License
+
+[MIT](LICENSE)

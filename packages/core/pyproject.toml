@@ -2,6 +2,7 @@
 name = "addex-core"
 version = "0.1.0"
 description = "Shared data model, Stremio manifest parser and ID helpers for Addex"
+license = "MIT"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.13",
