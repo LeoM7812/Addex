@@ -31,8 +31,11 @@ def test_user_config_roundtrip():
 
 def test_manifest(db, world, client_for, monkeypatch):
     monkeypatch.setenv("ADDEX_CONTACT_EMAIL", "addex@example.org")
+    monkeypatch.setenv("ADDEX_STREMIO_ADDONS_SIGNATURE", "sig.abc")
     _, resp = _get(db, world, client_for, "/manifest.json")
     body = resp.json()
+    assert body["stremioAddonsConfig"] == {"issuer": "https://stremio-addons.net",
+                                           "signature": "sig.abc"}
     assert resp.headers["cache-control"] == "max-age=3600, public"
     assert "cacheMaxAge" not in body
     assert body["logo"] == "http://test/static/logo.png"
@@ -45,6 +48,13 @@ def test_manifest(db, world, client_for, monkeypatch):
     assert "idPrefixes" not in body
     assert body["resources"][0] == {"name": "stream", "types": ["movie", "series"],
                                     "idPrefixes": ["tt", "kitsu:", "mal:"]}
+
+
+def test_manifest_without_optional_env(db, world, client_for, monkeypatch):
+    monkeypatch.delenv("ADDEX_CONTACT_EMAIL", raising=False)
+    monkeypatch.delenv("ADDEX_STREMIO_ADDONS_SIGNATURE", raising=False)
+    body = _get(db, world, client_for, "/manifest.json")[1].json()
+    assert "contactEmail" not in body and "stremioAddonsConfig" not in body
 
 
 def test_configured_manifest_and_bad_config(db, world, client_for):

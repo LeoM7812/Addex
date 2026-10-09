@@ -99,6 +99,13 @@ def build_manifest(base_url: str) -> dict:
     }
     if email := os.environ.get("ADDEX_CONTACT_EMAIL"):
         manifest["contactEmail"] = email  # enables the Report button in Stremio
+    if signature := os.environ.get("ADDEX_STREMIO_ADDONS_SIGNATURE"):
+        # Proves to stremio-addons.net that this deployment owns its listing. Issued per
+        # addon URL, so it comes from the environment rather than the code.
+        manifest["stremioAddonsConfig"] = {
+            "issuer": "https://stremio-addons.net",
+            "signature": signature,
+        }
     return manifest
 
 

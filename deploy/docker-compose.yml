@@ -17,6 +17,7 @@ x-app: &app
     ADDEX_DATABASE_URL: postgresql+psycopg://addex:${POSTGRES_PASSWORD}@postgres:5432/addex
     ADDEX_REDIS_URL: redis://redis:6379/0
     ADDEX_CONTACT_EMAIL: ${ADDEX_CONTACT_EMAIL:-}
+    ADDEX_STREMIO_ADDONS_SIGNATURE: ${ADDEX_STREMIO_ADDONS_SIGNATURE:-}
 
 services:
   postgres:
