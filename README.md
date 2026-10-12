@@ -5,6 +5,8 @@
 and a Stremio addon that tells you, right in the stream list, which addon to install to
 watch what you're looking at.
 
+https://stremio-addons.net/addons/addex
+
 **Live:** <https://addex.duckdns.org>
 
 Addex never hosts, stores or returns streams. It only records *whether* an addon answers
